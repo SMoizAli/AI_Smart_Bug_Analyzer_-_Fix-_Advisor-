@@ -1,4 +1,6 @@
 import streamlit as st
+import uuid
+from datetime import datetime 
 
 st.markdown(
     """
@@ -13,7 +15,7 @@ st.markdown(
 
 
 st.title("AI Smart Bug Analyzer & Fix Advisor")
-st.write("Hello! If you can see this, Streamlit is working.")
+st.write("Hello! I am waiting for you bug report to be submitted .")
 
 
 
@@ -35,6 +37,14 @@ if st.button("Submit"):
     if final_text =="": 
         st.warning("Please enter a bug report or upload a file before submitting.")
     else:
+        bug_record = {
+            "bug_id":"BUG-"+str(uuid.uuid4())[:8],
+            "description":final_text,
+            "stack_trace":final_text,
+            "timestamp":datetime.now().isoformat(),
+            "source":"user_submission"
+        }
+
         st.success("Bug report received")
         st.write("Here is what you submitted")
-        st.code(final_text)
+        st.json(bug_record)
