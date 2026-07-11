@@ -54,7 +54,7 @@ The Multi-Agent Pipeline queries a **Historical Defect Knowledge Base** (built u
 - **Language:** Python
 - **UI / Bug Submission:** Streamlit
 - **Embedding Model:** sentence-transformers (`all-MiniLM-L6-v2`)
-- **Vector Database:** ChromaDB
+- **Vector Similarity Search:** in-memory cosine similarity (`scikit-learn`) over saved embeddings — *(ChromaDB is installed and was used/tested during development; the live app currently does not use it — see Known Limitations)*
 - **Chunking:** LangChain text splitters
 - **Data Processing:** pandas
 - **Agent Orchestration:** Python (custom classes for Milestone 1; may adopt LangChain/CrewAI later)
@@ -84,6 +84,17 @@ notebooks/    → exploration/testing notebooks (chunking, embeddings, retrieval
 
 ---
 
+## Known Limitations 
+
+- **Embeddings:** Milestone 1 originally done with TF-IDF vectorization as a substitute for sentence-transformers, due to an unresolved PyTorch DLL error on Windows. The root cause was later identified as Windows' default file path length limit, fixed by enabling Long Path support, and the project now uses real `sentence-transformers` (`all-MiniLM-L6-v2`) embeddings.
+
+- **Vector search:** ChromaDB was used and verified correct (including fixing a distance-metric bug — it defaults to Euclidean/L2 distance, not cosine, unless explicitly configured). Persistent, disk-backed ChromaDB storage proved unreliable on this Windows machine (file-locking, corrupted index issues), so the current live app uses an in-memory cosine-similarity search instead, which is mathematically equivalent for this dataset size.
+
+- **Agents:** The 5-agent pipeline (Triage, Log Analysis, Root Cause, Duplicate Detection, Remediation) shown in the architecture diagram is currently design-only — not yet implemented in code. This was outside Milestone 1's required scope (Bug Submission Module + working RAG pipeline).
+
+---
+
+
 ## Status
 
 - [x] Task 1: Study required concepts
@@ -97,3 +108,4 @@ notebooks/    → exploration/testing notebooks (chunking, embeddings, retrieval
 - [x] Task 9: Embedding Generation
 - [x] Task 10: Vector Database
 - [x] Task 11: Retrieval Testing
+- [ ] Agents 1-5: Coded implementation (currently design-only, see `docs/03_agents.md`)
