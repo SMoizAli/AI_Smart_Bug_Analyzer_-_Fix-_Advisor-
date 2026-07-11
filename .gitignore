@@ -28,3 +28,4 @@ notebooks/01_dataset_collection-Copy1.ipynb
 
 # Old duplicate vectorizer (canonical copy lives in src/)
 notebooks/vectorizer.pkl
+src/embeddings_real.npy
