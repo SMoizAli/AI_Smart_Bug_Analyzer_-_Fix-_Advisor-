@@ -90,10 +90,10 @@ notebooks/    → exploration/testing notebooks (chunking, embeddings, retrieval
 - [x] Task 2: Design system architecture
 - [x] Task 3: Define agent responsibilities
 - [x] Task 4: Design the knowledge base
-- [ ] Task 5: Build the Bug Submission Module
-- [ ] Task 6: Build the Historical Defect Knowledge Base
-- [ ] Task 7: Data Cleaning
-- [ ] Task 8: Chunking
-- [ ] Task 9: Embedding Generation
-- [ ] Task 10: Vector Database
-- [ ] Task 11: Retrieval Testing
+- [x] Task 5: Build the Bug Submission Module
+- [x] Task 6: Build the Historical Defect Knowledge Base
+- [x] Task 7: Data Cleaning
+- [x] Task 8: Chunking
+- [x] Task 9: Embedding Generation
+- [x] Task 10: Vector Database
+- [x] Task 11: Retrieval Testing
