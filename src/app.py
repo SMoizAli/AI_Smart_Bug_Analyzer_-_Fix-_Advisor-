@@ -13,7 +13,9 @@ from sklearn.metrics.pairwise import cosine_similarity
 # Make sure agents.py (in the same folder) can be imported regardless of
 # where Streamlit was launched from
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from agents import run_orchestration, build_simple_view
+from agents import run_orchestration, build_simple_view, init_db, save_submission
+
+init_db()
 
 st.markdown(
     """
@@ -87,6 +89,8 @@ elif should_analyze:
             bug_id=bug_record["bug_id"]
         )
         st.session_state.combined_result = combined_result
+        simple_view_for_db = build_simple_view(combined_result)
+        save_submission(simple_view_for_db, bug_record["description"], bug_record["timestamp"])
 
 # --- Display results (uses whatever was last analyzed, from session_state) ---
 if st.session_state.combined_result is not None:
