@@ -108,4 +108,10 @@ notebooks/    → exploration/testing notebooks (chunking, embeddings, retrieval
 - [x] Task 9: Embedding Generation
 - [x] Task 10: Vector Database
 - [x] Task 11: Retrieval Testing
-- [ ] Agents 1-5: Coded implementation (currently design-only, see `docs/03_agents.md`)
+- [x] Agents 1-5: Coded implementation (currently design can  see `docs/03_agents.md`)
+- [x] Agent 1 :Triage Agent 
+- [x] Agent 2 :Log Analysis Agent
+- [x] Agent 3 :Root Cause Agent
+- [x] Agent 4 :Duplicate Detection Agent 
+- [x] Agent 5 :Remediation Agent 
+
