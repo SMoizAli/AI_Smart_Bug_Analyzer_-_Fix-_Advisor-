@@ -6,6 +6,9 @@ from dotenv import load_dotenv
 import sqlite3
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.cluster import AgglomerativeClustering
+import pandas as pd
+from sentence_transformers import SentenceTransformer
 
 
 # Load API key and create client
@@ -231,20 +234,20 @@ def init_db():
     conn.close()
 
 
-def save_submission(actual_result, description, timestamp):
+def save_submission(actual_result, description, timestamp, root_cause_hypothesis=None, recommended_fix=None):
     base_dir = os.path.dirname(os.path.abspath(__file__))
     db_path = os.path.join(base_dir, "..", "data", "bug_submissions.db")
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute("""
         INSERT OR REPLACE INTO bug_submissions
-        (bug_id, severity, priority, component, error_type, failure_location, code_path, confidence, reasoning, description, timestamp)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (bug_id, severity, priority, component, error_type, failure_location, code_path, confidence, reasoning, description, timestamp, root_cause_hypothesis, recommended_fix)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         actual_result["bug_id"], actual_result["severity"], actual_result["priority"],
         actual_result["component"], actual_result["error_type"], actual_result["failure_location"],
         actual_result["code_path"], actual_result["confidence"], actual_result["reasoning"],
-        description, timestamp
+        description, timestamp, root_cause_hypothesis, recommended_fix
     ))
     conn.commit()
     conn.close()
@@ -458,6 +461,8 @@ match: Indicates how closely the historical bug matches the current bug (e.g., "
 similarity: A numeric score (0 to 1) representing how similar the current bug is to the historical bug, where 1.0 means an almost identical match and 0.0 means completely different.
 
 
+IMPORTANT: The "before" and "after" values inside code_example must be single, valid JSON string values. If example code spans multiple lines, join those lines using the two-character escape sequence \n (a backslash followed by the letter n) — never include an actual line break inside any field value. The entire JSON response must be valid on parse, with no raw newline or control characters inside any string.
+
 
 
 output : 
@@ -667,3 +672,134 @@ def remediation_agent(bug_id, severity, component, error_type, failure_location,
         }
 
     return result
+COMPONENT_MERGE_MAP = {
+    "Startup/Initialization": "Initialization",
+}
+
+
+def cluster_root_causes(df, distance_threshold=0.35):
+    reasoning_texts = df['reasoning'].fillna("").tolist()
+
+    model = SentenceTransformer('all-MiniLM-L6-v2')
+    reasoning_embeddings = model.encode(reasoning_texts, convert_to_numpy=True)
+
+    clustering = AgglomerativeClustering(
+        n_clusters=None,
+        distance_threshold=distance_threshold,
+        metric='cosine',
+        linkage='average'
+    )
+    cluster_labels = clustering.fit_predict(reasoning_embeddings)
+
+    df_temp = df.copy()
+    df_temp['cluster_id'] = cluster_labels
+
+    total = len(df_temp)
+    root_cause_breakdown = []
+
+    for cluster_id in sorted(df_temp['cluster_id'].unique()):
+        cluster_rows = df_temp[df_temp['cluster_id'] == cluster_id]
+        count = len(cluster_rows)
+
+        error_type_counts = cluster_rows['error_type'].value_counts()
+        top_label = error_type_counts.idxmax()
+        distinct_error_types = error_type_counts.index.tolist()
+
+        if top_label == "Unknown":
+            top_label = "Unclassified (Log Analysis extraction failed)"
+
+        root_cause_breakdown.append({
+            "label": top_label,
+            "count": int(count),
+            "percent": round((count / total) * 100, 1),
+            "bug_ids": cluster_rows['bug_id'].tolist(),
+            "distinct_error_types": distinct_error_types
+        })
+
+    root_cause_breakdown.sort(key=lambda x: x["count"], reverse=True)
+
+    return root_cause_breakdown
+
+
+def compute_defect_analytics(df, distance_threshold=0.35):
+    total = len(df)
+
+    unknown_mask = df['component'] == 'Unknown'
+    unknown_count = int(unknown_mask.sum())
+    classified_count = total - unknown_count
+    unknown_rate = round((unknown_count / total) * 100, 1) if total > 0 else 0.0
+
+    severity_counts = df['severity'].value_counts()
+    severity_breakdown = [
+        {"label": label, "count": int(count), "percent": round((count / total) * 100, 1)}
+        for label, count in severity_counts.items()
+    ]
+
+    classified_df = df[~unknown_mask]
+    component_counts = classified_df['component_normalized'].value_counts()
+    component_breakdown = [
+        {
+            "label": label,
+            "count": int(count),
+            "percent": round((count / classified_count) * 100, 1) if classified_count > 0 else 0.0
+        }
+        for label, count in component_counts.items()
+    ]
+
+    df_dates = pd.to_datetime(df['timestamp']).dt.date
+    activity_counts = df_dates.value_counts().sort_index()
+    submission_activity = [
+        {"date": str(date), "count": int(count)}
+        for date, count in activity_counts.items()
+    ]
+
+    root_cause_breakdown = cluster_root_causes(df, distance_threshold=distance_threshold)
+
+    return {
+        "total_submissions": total,
+        "classified_count": classified_count,
+        "unknown_count": unknown_count,
+        "unknown_rate": unknown_rate,
+        "severity_breakdown": severity_breakdown,
+        "component_breakdown": component_breakdown,
+        "root_cause_breakdown": root_cause_breakdown,
+        "submission_activity": submission_activity
+    }
+def add_resolved_bug_to_kb(bug_id, description, error_type, severity, recommended_fix, source_dataset="live_submissions"):
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    embeddings_path = os.path.join(base_dir, "embeddings_real.npy")
+    metadata_path = os.path.join(base_dir, "chunks_metadata.csv")
+
+    # Build text the same way the original KB was built: title-equivalent + ". " + description
+    # error_type stands in for "title" here, since your bugs don't have a separate title field
+    full_text = f"{error_type}. {description}"
+
+    model = SentenceTransformer('all-MiniLM-L6-v2')
+    new_embedding = model.encode([full_text], convert_to_numpy=True)
+
+    # Load existing KB
+    existing_embeddings = np.load(embeddings_path)
+    existing_metadata = pd.read_csv(metadata_path)
+
+    # Append new vector
+    updated_embeddings = np.vstack([existing_embeddings, new_embedding])
+
+    # Append new metadata row, same columns as the existing KB
+    new_row = pd.DataFrame([{
+        "bug_id": bug_id,
+        "title": error_type,
+        "severity": severity,
+        "resolution": recommended_fix,
+        "status": "resolved",
+        "source_dataset": source_dataset
+    }])
+    updated_metadata = pd.concat([existing_metadata, new_row], ignore_index=True)
+
+    # Save both back to disk
+    np.save(embeddings_path, updated_embeddings)
+    updated_metadata.to_csv(metadata_path, index=False)
+
+    return {
+        "success": True,
+        "new_kb_size": len(updated_metadata)
+    }

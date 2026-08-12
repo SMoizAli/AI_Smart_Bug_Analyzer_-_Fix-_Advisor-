@@ -56861,3 +56861,7 @@ MNG-1318,mvn.bat sets incorrect value to M2_HOME [Windows 2000],Major,Fixed,Fixe
 XALANC-581,pure virtual function call error,Major,Cannot Reproduce,Cannot Reproduce,Apache
 MNG-1317,m2.bat doesn't work on Windows 2000,Major,Fixed,Fixed,Apache
 MNG-1317,m2.bat doesn't work on Windows 2000,Major,Fixed,Fixed,Apache
+BUG-d5b55cac,NameError,Medium,"Define the function 'adddd' before it is called, or correct the function name if it is a typo.",resolved,live_submissions
+BUG-a6564d59,NameError,Medium,"Correct the typo in the function name from 'subbb' to 'subb', or define the function 'subbb' before it is called.",resolved,live_submissions
+BUG-11babb9c,SyntaxError,Medium,Add a colon at the end of the if statement to correct the syntax.,resolved,live_submissions
+BUG-5809b03c,Cannot Find Symbol,Medium,Correct the typo in the System class from 'Out' to 'out'.,resolved,live_submissions

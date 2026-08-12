@@ -1,6 +1,8 @@
-# AI Smart Bug Analyzer & Fix Advisor (Group 1)
+# Creation of Intelligent Bug Diagnosis Platform with Fix Recommendation Assistance
 
-An AI-powered system that takes in bug reports, stack traces, or error logs, and uses a **multi-agent pipeline** combined with a **RAG (Retrieval-Augmented Generation)** knowledge base of historical defects to triage, analyze, and suggest fixes for software bugs.
+*(Formerly: AI Smart Bug Analyzer & Fix Advisor — renamed per Milestone 4 guidance; no change to objectives, implementation, or deliverables.)*
+
+- An AI-powered system that takes bug reports, stack traces, or error logs and uses a multi-agent pipeline combined with a RAG knowledge base of historical  defects to triage, analyze, detect duplicates, and suggest fixes for software bugs  and grows its own knowledge base over time as recommendations are confirmed working.
 
 This is a solo InfosysSpringboard internship project, built entirely in Python by me.
 
@@ -84,34 +86,22 @@ notebooks/    → exploration/testing notebooks (chunking, embeddings, retrieval
 
 ---
 
-## Known Limitations 
-
-- **Embeddings:** Milestone 1 originally done with TF-IDF vectorization as a substitute for sentence-transformers, due to an unresolved PyTorch DLL error on Windows. The root cause was later identified as Windows' default file path length limit, fixed by enabling Long Path support, and the project now uses real `sentence-transformers` (`all-MiniLM-L6-v2`) embeddings.
-
-- **Vector search:** ChromaDB was used and verified correct (including fixing a distance-metric bug — it defaults to Euclidean/L2 distance, not cosine, unless explicitly configured). Persistent, disk-backed ChromaDB storage proved unreliable on this Windows machine (file-locking, corrupted index issues), so the current live app uses an in-memory cosine-similarity search instead, which is mathematically equivalent for this dataset size.
-
-- **Agents:** The 5-agent pipeline (Triage, Log Analysis, Root Cause, Duplicate Detection, Remediation) shown in the architecture diagram is currently design-only — not yet implemented in code. This was outside Milestone 1's required scope (Bug Submission Module + working RAG pipeline).
-
+## Known Limitations
+- Historical grounding is weaker for languages underrepresented in the
+  original historical dataset (Rust, Go, TypeScript) — improves as the KB
+  grows from confirmed live fixes.
+- Compound (multi-issue) submissions may produce a combined error_type
+  rather than cleanly separated ones.
+- Subject to the LLM provider's daily API quota under heavy testing volume.
 ---
 
 
-## Status
+## Status (as of Milestone 4)
 
-- [x] Task 1: Study required concepts
-- [x] Task 2: Design system architecture
-- [x] Task 3: Define agent responsibilities
-- [x] Task 4: Design the knowledge base
-- [x] Task 5: Build the Bug Submission Module
-- [x] Task 6: Build the Historical Defect Knowledge Base
-- [x] Task 7: Data Cleaning
-- [x] Task 8: Chunking
-- [x] Task 9: Embedding Generation
-- [x] Task 10: Vector Database
-- [x] Task 11: Retrieval Testing
-- [x] Agents 1-5: Coded implementation (currently design can  see `docs/03_agents.md`)
-- [x] Agent 1 :Triage Agent 
-- [x] Agent 2 :Log Analysis Agent
-- [x] Agent 3 :Root Cause Agent
-- [x] Agent 4 :Duplicate Detection Agent 
-- [x] Agent 5 :Remediation Agent 
-
+- [x] Milestones 1–3: Knowledge base, all 5 agents, full pipeline — complete
+- [x] Milestone 4, Task 1: Defect Pattern Analytics Dashboard — complete
+- [x] Milestone 4, Task 2: Knowledge Base Growth Mechanism — complete, verified
+- [x] Milestone 4, Task 3: End-to-End Testing — partially complete (16/39
+      test cases; remainder blocked by LLM provider daily quota — see Testing
+      Report for full detail)
+- [x] Milestone 4, Task 4: Documentation, project report, final demo
