@@ -23,7 +23,8 @@ def call_llm_with_retry(system_prompt, user_message, max_retries=3):
     for attempt in range(max_retries):
         try:
             response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                #model="llama-3.3-70b-versatile",
+                model="openai/gpt-oss-120b",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message}
