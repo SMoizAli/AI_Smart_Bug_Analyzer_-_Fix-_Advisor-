@@ -56865,3 +56865,9 @@ BUG-d5b55cac,NameError,Medium,"Define the function 'adddd' before it is called, 
 BUG-a6564d59,NameError,Medium,"Correct the typo in the function name from 'subbb' to 'subb', or define the function 'subbb' before it is called.",resolved,live_submissions
 BUG-11babb9c,SyntaxError,Medium,Add a colon at the end of the if statement to correct the syntax.,resolved,live_submissions
 BUG-5809b03c,Cannot Find Symbol,Medium,Correct the typo in the System class from 'Out' to 'out'.,resolved,live_submissions
+BUG-3e2e10ec,TypeError,Medium,"Correct the typo in the console.Log function call to console.log, ensuring proper JavaScript syntax and type usage.",resolved,live_submissions
+BUG-f936f51d,Compilation Error CS0103,Medium,"Add a using directive for the System namespace to import the Console class, or ensure that the correct namespace is being used if a custom 'console' object is intended.",resolved,live_submissions
+BUG-04648d1c,Compilation Error,Medium,"Correct the typo in the identifier 'fMt' to 'fmt', which is the correct identifier for the Go standard library's fmt package.",resolved,live_submissions
+BUG-c5667013,Compilation Error CS0103,Medium,"Add a using directive for the System namespace at the top of the Main.cs file to import the Console class, which contains the print method.",resolved,live_submissions
+BUG-6fa65133,Compilation Error: Cannot Find Symbol,Medium,"Correct the typo in the println method call to System.out.println(""Hello World in Java"");",resolved,live_submissions
+BUG-63fe7f57,ReferenceError,Medium,Correct the typo in the console.log function call by changing 'coNsole' to 'console'.,resolved,live_submissions
