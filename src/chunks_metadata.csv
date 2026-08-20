@@ -56871,3 +56871,8 @@ BUG-04648d1c,Compilation Error,Medium,"Correct the typo in the identifier 'fMt' 
 BUG-c5667013,Compilation Error CS0103,Medium,"Add a using directive for the System namespace at the top of the Main.cs file to import the Console class, which contains the print method.",resolved,live_submissions
 BUG-6fa65133,Compilation Error: Cannot Find Symbol,Medium,"Correct the typo in the println method call to System.out.println(""Hello World in Java"");",resolved,live_submissions
 BUG-63fe7f57,ReferenceError,Medium,Correct the typo in the console.log function call by changing 'coNsole' to 'console'.,resolved,live_submissions
+BUG-d246e5e9,Compilation Error: 'Cout' is Not a Member of 'std',Medium,"Correct the typo in the usage of std::cout by changing 'Cout' to 'cout', and ensure the iostream header file is correctly included.",resolved,live_submissions
+BUG-53f408c9,ReferenceError,Low,This is a duplicate of BUG-63fe7f57. Correct the typo by using the proper global object name 'console' instead of 'coNsole'.,resolved,live_submissions
+BUG-69dac52d,SyntaxError,Low,"Add the missing colon after the for‑loop header (e.g., `for i in range(0,20):`).",resolved,live_submissions
+BUG-3593c2d2,NameError,Low,Correct the misspelled function name `prInt` to the proper built‑in `print` function.,resolved,live_submissions
+BUG-44d27ae9,ReferenceError,Low,This is a duplicate of BUG-63fe7f57 (and BUG-53f408c9). Apply the same fix: correct the typo by using the proper global object name `console` instead of `coNsole`.,resolved,live_submissions
