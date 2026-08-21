@@ -9,6 +9,7 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import sqlite3
 import plotly.express as px
+from pathlib import Path
 
 st.set_page_config(layout="wide")
 
@@ -24,6 +25,8 @@ from agents import (
 
 from pathlib import Path
 
+# Get the project root directory (one level up from src/)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 init_db()
@@ -229,6 +232,8 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
+
 page = st.sidebar.radio("Creation of Intelligent 🐞 Diagnosis Platform with Fix Recommendation Assistance", ["🏠 Dashboard","1️⃣Submit Bug", "2️⃣Analytics Dashboard","🧠Knowledge Base","3️⃣About The App","📚User Guide"])
 
 if page == "1️⃣Submit Bug":
@@ -926,22 +931,25 @@ elif page == "2️⃣Analytics Dashboard":
 
     else:
         st.info("Click 'Refresh Analytics' to compute the current defect pattern analytics.")
-elif page == "3️⃣About The App": 
-         st.title("About the App")
 
-         md_path = Path("C:/Users/famil/OneDrive/Desktop/AI_Smart_Bug_Analyzer_-_Fix-_Advisor-/README.md")
-         md_text = md_path.read_text(encoding="utf-8")
-         
-         st.markdown(md_text)
- 
+
+
+
+elif page == "3️⃣About The App":
+    st.title("About the App")
+    md_path = PROJECT_ROOT / "README.md"
+    if md_path.exists():
+        st.markdown(md_path.read_text(encoding="utf-8"))
+    else:
+        st.warning("`README.md` not found in project root.")
 
 elif page == "📚User Guide":
     st.title("📚 User Guide")
-
-    md_path = Path("C:/Users/famil/OneDrive/Desktop/AI_Smart_Bug_Analyzer_-_Fix-_Advisor-/docs/User_guide.md")
-    md_text = md_path.read_text(encoding="utf-8")
-
-    st.markdown(md_text)
+    md_path = PROJECT_ROOT / "docs" / "User_guide.md"
+    if md_path.exists():
+        st.markdown(md_path.read_text(encoding="utf-8"))
+    else:
+        st.warning("`docs/User_guide.md` not found.")
 
 elif page == "🧠Knowledge Base":
     st.title("🧠 Knowledge Base Repository")
@@ -950,7 +958,9 @@ elif page == "🧠Knowledge Base":
     # =========================================================================
     # 🔴 PATH CONFIGURATION (Set your CSV & DB paths)
     # =========================================================================
-    KB_CSV_PATH = r"C:\Users\famil\OneDrive\Desktop\AI_Smart_Bug_Analyzer_-_Fix-_Advisor-\data\knowledge_base_with_severity.csv"
+    BASE_DIR = Path(__file__).resolve().parent
+    KB_CSV_PATH = BASE_DIR / "data"/"knowledge_base_with_severity.csv"
+    # KB_CSV_PATH =Path(__file__).resolve().parent / "data" / "knowledge_base_with_severity.csv"
     BUG_DB_PATH = Path(__file__).resolve().parent / "data" / "bug_submissions.db"
     
     # Fallback to parent dir if DB is located in ../data/
