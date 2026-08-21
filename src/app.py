@@ -958,7 +958,7 @@ elif page == "🧠Knowledge Base":
     # =========================================================================
     # 🔴 PATH CONFIGURATION (Set your CSV & DB paths)
     # =========================================================================
-    BASE_DIR = Path(__file__).resolve().parent
+    BASE_DIR = Path(__file__).resolve().parent.parent
     KB_CSV_PATH = BASE_DIR / "data"/"knowledge_base_with_severity.csv"
     # KB_CSV_PATH =Path(__file__).resolve().parent / "data" / "knowledge_base_with_severity.csv"
     BUG_DB_PATH = Path(__file__).resolve().parent / "data" / "bug_submissions.db"
