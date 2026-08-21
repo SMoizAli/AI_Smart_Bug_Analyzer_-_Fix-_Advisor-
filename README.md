@@ -2,6 +2,9 @@
 
 *(Formerly: AI Smart Bug Analyzer & Fix Advisor — renamed per Milestone 4 guidance; no change to objectives, implementation, or deliverables.)*
 
+> 🚀 **Live Demo:** [https://6fok68lbrbe9y8afg4entg.streamlit.app/](https://6fok68lbrbe9y8afg4entg.streamlit.app/)  
+> 📦 **Interactive Streamlit Cloud Deployment**
+
 - An AI-powered system that takes bug reports, stack traces, or error logs and uses a multi-agent pipeline combined with a RAG knowledge base of historical  defects to triage, analyze, detect duplicates, and suggest fixes for software bugs  and grows its own knowledge base over time as recommendations are confirmed working.
 
 This is a solo InfosysSpringboard internship project, built entirely in Python by me.
@@ -28,7 +31,7 @@ This is a solo InfosysSpringboard internship project, built entirely in Python b
 >                                                                              
 >   ├─ Triage Agent─────────────────                  │
 >                                       
->   ├─ Log Analysis Agent─────────────        │  ←── queries ──→  Historical Defect Knowledge Base (Vector DB / RAG)
+>   ├─ Log Analysis Agent─────────────        │  ←── queries ──→  Historical Defect Knowledge Base (all-MiniLM-L6-v2 Dense Vectors / RAG)
 >                                       
 >   ├─ Root Cause Agent──────────────                                │                                    
 >                                       
@@ -45,8 +48,6 @@ This is a solo InfosysSpringboard internship project, built entirely in Python b
 >
 
 
----
-
 The Multi-Agent Pipeline queries a **Historical Defect Knowledge Base** (built using public bug datasets from Mozilla, Apache, and Eclipse via Kaggle) to find similar past bugs and inform its analysis and fix suggestions.
 
 ---
@@ -60,7 +61,7 @@ The Multi-Agent Pipeline queries a **Historical Defect Knowledge Base** (built u
 - **Chunking:** LangChain text splitters
 - **Data Processing:** pandas
 - **Agent Orchestration:** Python (custom classes for Milestone 1; may adopt LangChain/CrewAI later)
-- **LLM (future remediation generation):** TBD based on access
+- **LLM Engine:** `openai/gpt-oss-120b` (Migrated from `llama-3.3-70b-versatile`)
 
 ---
 
@@ -105,3 +106,4 @@ notebooks/    → exploration/testing notebooks (chunking, embeddings, retrieval
       test cases; remainder blocked by LLM provider daily quota — see Testing
       Report for full detail)
 - [x] Milestone 4, Task 4: Documentation, project report, final demo
+- [x] Live Deployment : Deployed at Streamlit Cloud at  `https://6fok68lbrbe9y8afg4entg.streamlit.app/`

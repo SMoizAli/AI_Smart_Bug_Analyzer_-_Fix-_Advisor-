@@ -9,6 +9,7 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import sqlite3
 import plotly.express as px
+from pathlib import Path
 
 st.set_page_config(layout="wide")
 
@@ -24,6 +25,8 @@ from agents import (
 
 from pathlib import Path
 
+# Get the project root directory (one level up from src/)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 init_db()
@@ -229,7 +232,9 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-page = st.sidebar.radio("Creation of Intelligent 🐞 Diagnosis Platform with Fix Recommendation Assistance", ["1️⃣Submit Bug", "2️⃣Analytics Dashboard","🧠Knowledge Base","3️⃣About The App","📚User Guide"])
+
+
+page = st.sidebar.radio("Creation of Intelligent 🐞 Diagnosis Platform with Fix Recommendation Assistance", ["🏠 Dashboard","1️⃣Submit Bug", "2️⃣Analytics Dashboard","🧠Knowledge Base","3️⃣About The App","📚User Guide"])
 
 if page == "1️⃣Submit Bug":
     st.title(" Submit Defect logs")
@@ -926,22 +931,25 @@ elif page == "2️⃣Analytics Dashboard":
 
     else:
         st.info("Click 'Refresh Analytics' to compute the current defect pattern analytics.")
-elif page == "3️⃣About The App": 
-         st.title("About the App")
 
-         md_path = Path("C:/Users/famil/OneDrive/Desktop/AI_Smart_Bug_Analyzer_-_Fix-_Advisor-/README.md")
-         md_text = md_path.read_text(encoding="utf-8")
-         
-         st.markdown(md_text)
- 
+
+
+
+elif page == "3️⃣About The App":
+    st.title("About the App")
+    md_path = PROJECT_ROOT / "README.md"
+    if md_path.exists():
+        st.markdown(md_path.read_text(encoding="utf-8"))
+    else:
+        st.warning("`README.md` not found in project root.")
 
 elif page == "📚User Guide":
     st.title("📚 User Guide")
-
-    md_path = Path("C:/Users/famil/OneDrive/Desktop/AI_Smart_Bug_Analyzer_-_Fix-_Advisor-/docs/User_guide.md")
-    md_text = md_path.read_text(encoding="utf-8")
-
-    st.markdown(md_text)
+    md_path = PROJECT_ROOT / "docs" / "User_guide.md"
+    if md_path.exists():
+        st.markdown(md_path.read_text(encoding="utf-8"))
+    else:
+        st.warning("`docs/User_guide.md` not found.")
 
 elif page == "🧠Knowledge Base":
     st.title("🧠 Knowledge Base Repository")
@@ -950,7 +958,9 @@ elif page == "🧠Knowledge Base":
     # =========================================================================
     # 🔴 PATH CONFIGURATION (Set your CSV & DB paths)
     # =========================================================================
-    KB_CSV_PATH = r"C:\Users\famil\OneDrive\Desktop\AI_Smart_Bug_Analyzer_-_Fix-_Advisor-\data\knowledge_base_cleaned.csv"
+    BASE_DIR = Path(__file__).resolve().parent.parent
+    KB_CSV_PATH = BASE_DIR / "data"/"knowledge_base_with_severity.csv"
+    # KB_CSV_PATH =Path(__file__).resolve().parent / "data" / "knowledge_base_with_severity.csv"
     BUG_DB_PATH = Path(__file__).resolve().parent / "data" / "bug_submissions.db"
     
     # Fallback to parent dir if DB is located in ../data/
@@ -979,7 +989,7 @@ elif page == "🧠Knowledge Base":
                 total_fixed_till_now = 0
 
         # Most Frequent Severity
-        sev_col = next((c for c in kb_df.columns if "severity" in c.lower()), None)
+        sev_col = next((c for c in kb_df.columns if "severity_mapped" in c.lower()), None)
         if sev_col and not kb_df[sev_col].dropna().empty:
             top_severity = kb_df[sev_col].mode().iloc[0]
             top_severity_count = int((kb_df[sev_col] == top_severity).sum())
@@ -1047,3 +1057,121 @@ elif page == "🧠Knowledge Base":
 
     else:
         st.error(f"❌ File not found at: `{KB_CSV_PATH}`. Please check the path.")
+
+elif page == "🏠 Dashboard":
+    st.title("📊 Telemetry Dashboard")
+    st.caption("Real-time telemetry of ingested defect tickets and resolution tracking.")
+
+    # ---------------------------------------------------------
+    # Database Paths
+    # ---------------------------------------------------------
+    BASE_DIR = Path(__file__).resolve().parent
+    BUG_DB_PATH = BASE_DIR / "data" / "bug_submissions.db"
+    DEV_DB_PATH = BASE_DIR / "data" / "Developer_Submission.db"
+
+    # Fallback checks
+    if not BUG_DB_PATH.exists():
+        BUG_DB_PATH = BASE_DIR.parent / "data" / "bug_submissions.db"
+    if not DEV_DB_PATH.exists():
+        DEV_DB_PATH = BASE_DIR.parent / "data" / "Developer_Submission.db"
+
+    # ---------------------------------------------------------
+    # 1. Fetch Data & Calculate 4 Key Metrics
+    # ---------------------------------------------------------
+    total_bugs = 0
+    total_critical = 0
+    solved_critical = 0
+    top_dev_name = "N/A"
+    top_dev_count = 0
+    submissions_df = pd.DataFrame()
+
+    if BUG_DB_PATH.exists():
+        try:
+            conn = sqlite3.connect(BUG_DB_PATH)
+            submissions_df = pd.read_sql("SELECT * FROM bug_submissions ORDER BY timestamp DESC", conn)
+            conn.close()
+
+            if not submissions_df.empty:
+                total_bugs = len(submissions_df)
+                
+                # Critical bug calculations
+                crit_mask = submissions_df['severity'].astype(str).str.lower() == 'critical'
+                total_critical = int(crit_mask.sum())
+                
+                solved_crit_mask = crit_mask & (submissions_df['status'].astype(str) == 'resolved_added_to_kb')
+                solved_critical = int(solved_crit_mask.sum())
+        except Exception as e:
+            st.error(f"Error reading bug database: {e}")
+
+    # Query Developer Submissions for Top Reporter
+    if DEV_DB_PATH.exists():
+        try:
+            conn_dev = sqlite3.connect(DEV_DB_PATH)
+            dev_df = pd.read_sql("SELECT reporter_name, bug_id FROM Developer_Submission", conn_dev)
+            conn_dev.close()
+
+            if not dev_df.empty and 'reporter_name' in dev_df.columns:
+                clean_devs = dev_df['reporter_name'].dropna().astype(str).str.strip()
+                clean_devs = clean_devs[clean_devs != ""]
+                if not clean_devs.empty:
+                    top_dev_name = clean_devs.mode().iloc[0]
+                    top_dev_count = int((clean_devs == top_dev_name).sum())
+        except Exception as e:
+            pass
+
+    # ---------------------------------------------------------
+    # 2. Top Metric Ribbon (4 SaaS Cards)
+    # ---------------------------------------------------------
+    m1, m2, m3, m4 = st.columns(4)
+
+    with m1:
+        with st.container(border=True):
+            st.caption("📁 TOTAL SUBMITTED")
+            st.markdown(f"<h3 style='margin:0; color:#38bdf8;'>🐞 {total_bugs}</h3>", unsafe_allow_html=True)
+            st.caption("All Ingested Tickets")
+
+    with m2:
+        with st.container(border=True):
+            st.caption("🚨 CRITICAL BUGS")
+            st.markdown(f"<h3 style='margin:0; color:#f87171;'>🔥 {total_critical}</h3>", unsafe_allow_html=True)
+            st.caption("Fatal & Blocker Defects")
+
+    with m3:
+        with m3:
+            with st.container(border=True):
+                st.caption("✅ SOLVED CRITICAL")
+                st.markdown(f"<h3 style='margin:0; color:#4ade80;'>🛡️ {total_critical}</h3>", unsafe_allow_html=True)
+                st.caption(f"Resolved of {total_critical} Critical")
+
+    with m4:
+        with st.container(border=True):
+            st.caption("🏆 TOP CONTRIBUTOR")
+            st.markdown(f"<h3 style='margin:0; color:#fbbf24; font-size:1.2rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;'>👨‍💻 {top_dev_name}</h3>", unsafe_allow_html=True)
+            st.caption(f"{top_dev_count} Submissions logged")
+
+    st.divider()
+
+    # ---------------------------------------------------------
+    # 3. Live Defect Ticket Table (bug_submissions.db)
+    # ---------------------------------------------------------
+    with st.container(border=True):
+        t_head, t_search = st.columns([2.6, 1.4])
+        with t_head:
+            st.markdown("##### 🗂️ Ingested Defect Tickets")
+            st.caption("Direct telemetry feed from `bug_submissions.db`.")
+        with t_search:
+            db_search = st.text_input("Search Database", placeholder="Filter by ID, component, severity...", label_visibility="collapsed")
+
+        if not submissions_df.empty:
+            # Display relevant columns
+            cols_to_show = [c for c in ['bug_id', 'severity', 'priority', 'component', 'error_type', 'status', 'timestamp', 'recommended_fix'] if c in submissions_df.columns]
+            table_df = submissions_df[cols_to_show].copy()
+
+            if db_search.strip():
+                mask = table_df.astype(str).apply(lambda row: row.str.contains(db_search, case=False, na=False).any(), axis=1)
+                table_df = table_df[mask]
+
+            st.dataframe(table_df, use_container_width=True, height=450)
+            st.caption(f"Displaying {len(table_df)} of {total_bugs} total records.")
+        else:
+            st.info("No bug records found in `bug_submissions.db`. Submit a bug to populate telemetry.")
