@@ -750,7 +750,7 @@ elif page == "2️⃣Analytics Dashboard":
         st.divider()
 
         # --- 2. Side-by-Side Breakdown Charts with Pink & Bright High-Contrast Text ---
-        c_sev, c_comp = st.columns([3, 3])
+        c_sev, c_comp = st.columns([1.5, 3])
 
         with c_sev:
             with st.container(border=True):
