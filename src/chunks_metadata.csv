@@ -56876,3 +56876,4 @@ BUG-53f408c9,ReferenceError,Low,This is a duplicate of BUG-63fe7f57. Correct the
 BUG-69dac52d,SyntaxError,Low,"Add the missing colon after the for‑loop header (e.g., `for i in range(0,20):`).",resolved,live_submissions
 BUG-3593c2d2,NameError,Low,Correct the misspelled function name `prInt` to the proper built‑in `print` function.,resolved,live_submissions
 BUG-44d27ae9,ReferenceError,Low,This is a duplicate of BUG-63fe7f57 (and BUG-53f408c9). Apply the same fix: correct the typo by using the proper global object name `console` instead of `coNsole`.,resolved,live_submissions
+BUG-49972f80,NameError,Medium,This is a duplicate of BUG-029c65e9. Apply the same fix: add the missing import for matplotlib.pyplot (or correct the identifier) before using plt.,resolved,live_submissions

@@ -258,7 +258,7 @@ if page == "1️⃣Submit Bug":
             st.markdown('<span class="badge-filter-box">📝 Bug Report / Stack Trace</span>', unsafe_allow_html=True)
             bug_report = st.text_area(
                 "Bug Report / Stack Trace",
-                height=180,
+                height=300,
                 key="bug_report_input",
                 placeholder="Paste code trace logs, compile exception lines, or runtime errors here...",
                 label_visibility="collapsed"
@@ -564,10 +564,10 @@ if page == "1️⃣Submit Bug":
                     col_before, col_after = st.columns(2)
                     with col_before:
                         st.write("**Before:**")
-                        st.code(ce.get("before", ""))
+                        st.code(ce.get("before", "").replace("\\n", "\n"))
                     with col_after:
                         st.write("**After:**")
-                        st.code(ce.get("after", ""))
+                        st.code(ce.get("after", "").replace("\\n", "\n"))
 
             if remediation_result.get("validation_steps"):
                 st.write("**Validation Steps:**")
@@ -583,7 +583,14 @@ if page == "1️⃣Submit Bug":
             if remediation_result.get("references_used"):
                 st.write("**References Used:**")
                 for ref in remediation_result["references_used"]:
-                    match_info = f" ({ref['match']}, {ref['similarity']*100:.0f}%)" if "match" in ref else ""
+                    match = ref.get("match")
+                    similarity = ref.get("similarity")
+                    if match and similarity is not None:
+                        match_info = f" ({match}, {similarity*100:.0f}%)"
+                    elif match:
+                        match_info = f" ({match})"
+                    else:
+                        match_info = ""
                     st.write(f"- `{ref['bug_id']}`{match_info} — {ref.get('summary', '')}")
 
             # --- Confirm Fix Outcome (KB growth mechanism) ---
