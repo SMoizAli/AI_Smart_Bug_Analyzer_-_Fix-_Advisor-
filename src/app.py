@@ -10,10 +10,22 @@ from sklearn.metrics.pairwise import cosine_similarity
 import sqlite3
 import plotly.express as px
 from pathlib import Path
+import hashlib
+import smtplib
+import requests  
+import resend
+from email.mime.text import MIMEText
+import threading
+import time
+from dotenv import load_dotenv
 
+# 1. Page Config (MUST be very first Streamlit call)
 st.set_page_config(layout="wide")
 
+# 2. Load .env and define PROJECT_ROOT first
+load_dotenv()  
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 from agents import (
     run_orchestration, build_simple_view, init_db, save_submission,
@@ -23,219 +35,596 @@ from agents import (
     add_resolved_bug_to_kb
 )
 
-from pathlib import Path
-
-# Get the project root directory (one level up from src/)
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-
-
 init_db()
 
-init_db()
+# 3. Database paths
+DATA_DIR = PROJECT_ROOT / "data"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# --- Developer Metadata Database Setup ---
-DEV_DB_DIR = Path(__file__).resolve().parent / "data"
-DEV_DB_DIR.mkdir(parents=True, exist_ok=True)
-DEV_DB_PATH = DEV_DB_DIR / "Developer_Submission.db"
+DEV_DB_PATH = DATA_DIR / "Developer_Submission.db"
+AUTH_DB_PATH = DATA_DIR / "auth_users.db"
+BUG_DB_PATH = DATA_DIR / "bug_submissions.db"
 
-def init_developer_db():
-    conn = sqlite3.connect(DEV_DB_PATH)
+
+# =====================================================================
+# 🗄️ AUTHENTICATION & USER HELPERS
+# =====================================================================
+def init_auth_db():
+    conn = sqlite3.connect(AUTH_DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS Developer_Submission (
-            submission_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            bug_id TEXT,
-            project_name TEXT,
-            reporter_name TEXT,
-            developer_department TEXT,
-            group_number TEXT,
-            timestamp TEXT
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            last_login TEXT
         )
     """)
     conn.commit()
     conn.close()
 
-init_developer_db()
+init_auth_db()
 
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def register_user(email: str, password: str) -> tuple[bool, str]:
+    if not email.strip() or not password.strip():
+        return False, "Email and password cannot be empty."
+    conn = sqlite3.connect(AUTH_DB_PATH)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO users (email, password_hash, created_at, last_login) VALUES (?, ?, ?, ?)",
+            (email.strip().lower(), hash_password(password), datetime.now().isoformat(), None)
+        )
+        conn.commit()
+        conn.close()
+        return True, "Account registered successfully! You can now log in."
+    except sqlite3.IntegrityError:
+        conn.close()
+        return False, "This email is already registered."
+    except Exception as e:
+        conn.close()
+        return False, f"Registration failed: {e}"
+
+def verify_user(email: str, password: str) -> bool:
+    conn = sqlite3.connect(AUTH_DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT password_hash FROM users WHERE email = ?", (email.strip().lower(),))
+    row = cursor.fetchone()
+    if row and row[0] == hash_password(password):
+        cursor.execute("UPDATE users SET last_login = ? WHERE email = ?", (datetime.now().isoformat(), email.strip().lower()))
+        conn.commit()
+        conn.close()
+        return True
+    conn.close()
+    return False
+
+# =====================================================================
+# 📧 RESEND MANUAL DISPATCHER (With Stack Trace Included)
+# =====================================================================
+resend.api_key = os.getenv("Resend_API") or os.getenv("RESEND_API_KEY", "")
+
+def send_verification_email_api(recipient_email: str, bug_id: str, stack_trace: str = "") -> bool:
+    """Sends verification reminder with the original stack trace via Resend API."""
+    if not resend.api_key:
+        st.error("Resend API key not found in .env file.")
+        return False
+
+    trace_display = stack_trace.strip() if stack_trace and stack_trace.strip() else "No stack trace provided."
+
+    params: resend.Emails.SendParams = {
+        "from": "Bug Diagnosis System <onboarding@resend.dev>",
+        "to": [recipient_email],
+        "subject": f"Action Required: Verify Fix Outcome for Bug {bug_id}",
+        "html": f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; color: #0f172a; line-height: 1.6;">
+                <h3 style="color: #0284c7;">Defect Verification Required</h3>
+                <p>Hello,</p>
+                <p>You submitted ticket <strong>{bug_id}</strong>, which is currently pending outcome review.</p>
+                
+                <div style="background-color: #f1f5f9; border-left: 4px solid #0284c7; padding: 12px; margin: 15px 0; border-radius: 4px;">
+                    <h4 style="margin: 0 0 8px 0; color: #334155;">Original Submitted Stack Trace / Log:</h4>
+                    <pre style="background: #1e293b; color: #f8fafc; padding: 10px; border-radius: 6px; overflow-x: auto; font-size: 13px; font-family: monospace;"><code>{trace_display}</code></pre>
+                </div>
+
+                <p>Please log in to the portal and confirm the outcome:</p>
+                <ul>
+                    <li><strong>✅ Fix Worked</strong>: Appends fix to verified knowledge repository.</li>
+                    <li><strong>❌ Fix Did Not Work</strong>: Flags defect for further root-cause investigation.</li>
+                </ul>
+                <br>
+                <p><em>Intelligent 🐞 Bug Diagnosis Platform</em></p>
+            </body>
+        </html>
+        """
+    }
+    try:
+        resend.Emails.send(params)
+        return True
+    except Exception as e:
+        st.error(f"Failed to send email for {bug_id}: {e}")
+        return False
+
+
+def get_pending_review_bugs():
+    """Fetches tickets pending verification along with their submitted trace/description."""
+    if not BUG_DB_PATH.exists():
+        return []
+    try:
+        conn = sqlite3.connect(BUG_DB_PATH, timeout=10.0)
+        cursor = conn.cursor()
+        # Changed stack_trace -> description
+        cursor.execute("""
+            SELECT bug_id, severity, component, description, timestamp 
+            FROM bug_submissions 
+            WHERE status IS NULL 
+               OR status = '' 
+               OR LOWER(status) LIKE '%pending%'
+            ORDER BY timestamp DESC
+        """)
+        rows = cursor.fetchall()
+        conn.close()
+        return rows
+    except Exception as e:
+        st.error(f"Error fetching pending tickets: {e}")
+        return []
+
+def get_ticket_recipient_email(bug_id: str):
+    """Finds reporter email associated with the bug or falls back to current active user."""
+    target_email = None
+    if DEV_DB_PATH.exists():
+        try:
+            conn_dev = sqlite3.connect(DEV_DB_PATH, timeout=5.0)
+            cursor_dev = conn_dev.cursor()
+            cursor_dev.execute("SELECT reporter_name FROM Developer_Submission WHERE bug_id = ?", (bug_id,))
+            res = cursor_dev.fetchone()
+            conn_dev.close()
+            if res and "@" in str(res[0]):
+                target_email = res[0].strip()
+        except Exception:
+            pass
+
+    if not target_email and AUTH_DB_PATH.exists():
+        try:
+            conn_auth = sqlite3.connect(AUTH_DB_PATH, timeout=5.0)
+            cursor_auth = conn_auth.cursor()
+            cursor_auth.execute("SELECT email FROM users ORDER BY last_login DESC LIMIT 1")
+            auth_res = cursor_auth.fetchone()
+            conn_auth.close()
+            if auth_res and "@" in str(auth_res[0]):
+                target_email = auth_res[0].strip()
+        except Exception:
+            pass
+
+    return target_email or st.session_state.get("user_email")
+
+# =====================================================================
+# 🎨 CUSTOM CSS
+# =====================================================================
+# =====================================================================
+# 🎨 CUSTOM CSS
+# =====================================================================
 st.markdown(
     """
     <style>
-    /* 1. Header Bar Color */
     header[data-testid="stHeader"], .stAppHeader {
-        background-color: #0F3040 !important;
+        background-color: #FFFFFF !important;
+        border-bottom: 1px solid #E2E8F0 !important;
+    }
+    .stApp {
+        background-color: #F8FAFC !important;
+        font-size: 1.05rem !important;
+    }
+    p, span, label {
+        color: #0F172A;
     }
     
-    /* 2. Global Background */
-    .stApp {
-        background-color: #0F3040 !important;
-        color: #f1f5f9 !important;
-    }
-
-    /* 3. Sidebar Container */
+    /* =========================================================
+       2. SIDEBAR NAVIGATION (Vibrant Unique Icon Ring Palettes)
+       ========================================================= */
     [data-testid="stSidebar"] {
-        background-color: #09202c !important;
-        border-right: 1px solid #1a4a60;
+        background-color: #FFFFFF !important;
+        border-right: 2px solid #E2E8F0 !important;
     }
 
-    /* 4. Fix "Menu" Header Title Visibility */
     [data-testid="stSidebar"] [data-testid="stWidgetLabel"] p,
     [data-testid="stSidebar"] [data-testid="stWidgetLabel"] span {
-        color: #38bdf8 !important;
-        font-weight: 700 !important;
-        font-size: 1.05rem !important;
-        letter-spacing: 0.05em;
-        margin-bottom: 8px;
+        color: #0F172A !important;
+        font-weight: 900 !important;
+        font-size: 1.15rem !important;
+        margin-bottom: 12px;
     }
 
-    /* 5. Uniform Size for All Navigation Buttons */
     [data-testid="stSidebar"] div[role="radiogroup"] {
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: 12px;
         width: 100%;
     }
+
     [data-testid="stSidebar"] div[role="radiogroup"] > label {
         width: 100% !important;
-        min-height: 52px !important;
-        height: 52px !important;
-        box-sizing: border-box !important;
-        background: #0d2836;
-        border: 1px solid #1a4a60;
-        border-radius: 8px;
-        padding: 0 16px !important;
-        margin: 0 !important;
-        color: #ffffff !important;
-        font-weight: 600;
-        font-size: 0.95rem;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        display: flex !important;
-        align-items: center !important;
+        min-height: 54px !important;
+        border-radius: 20px !important;
+        font-weight: 800 !important;
+        font-size: 1.0rem !important;
+        padding: 4px 18px !important;
+        transition: all 0.22s ease-in-out !important;
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.04) !important;
     }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:hover {
-        border-color: #38bdf8;
-        background: #123648;
+
+    [data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-child {
+        display: none !important;
     }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label[data-checked="true"],
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) {
-        background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%) !important;
-        border: 1px solid #60a5fa !important;
-        color: #ffffff !important;
-        box-shadow: 0 0 12px rgba(59, 130, 246, 0.45);
+
+    /* BUTTON 1: 🏠 Dashboard -> Pink */
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(1) {
+        background-color: #FDF2F8 !important;
+        border: 6px solid #FBCFE8 !important;
     }
-    [data-testid="stSidebar"] div[role="radiogroup"] label p,
-    [data-testid="stSidebar"] div[role="radiogroup"] label span {
-        color: #ffffff !important;
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(1):hover {
+        border-color: #F472B6 !important;
+        transform: translateY(-2px);
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(1):has(input:checked),
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(1)[data-checked="true"] {
+        background: linear-gradient(135deg, #EC4899 0%, #DB2777 100%) !important;
+        border: 6px solid #FBCFE8 !important;
+        box-shadow: 0 6px 16px rgba(219, 39, 119, 0.35) !important;
+    }
+
+    /* BUTTON 2: 1️⃣ Submit Bug -> Butter Gold */
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(2) {
+        background-color: #FEFCE8 !important;
+        border: 6px solid #FEF08A !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(2):hover {
+        border-color: #FACC15 !important;
+        transform: translateY(-2px);
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(2):has(input:checked),
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(2)[data-checked="true"] {
+        background: linear-gradient(135deg, #EAB308 0%, #CA8A04 100%) !important;
+        border: 6px solid #FEF08A !important;
+        box-shadow: 0 6px 16px rgba(202, 138, 4, 0.35) !important;
+    }
+
+    /* BUTTON 3: 2️⃣ Analytics Dashboard -> Azure Blue */
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(3) {
+        background-color: #F0F9FF !important;
+        border: 6px solid #BAE6FD !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(3):hover {
+        border-color: #38BDF8 !important;
+        transform: translateY(-2px);
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(3):has(input:checked),
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(3)[data-checked="true"] {
+        background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%) !important;
+        border: 6px solid #BAE6FD !important;
+        box-shadow: 0 6px 16px rgba(2, 132, 199, 0.35) !important;
+    }
+
+    /* BUTTON 4: 🧠 Knowledge Base -> Emerald Mint Green */
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(4) {
+        background-color: #F0FDF4 !important;
+        border: 6px solid #BBF7D0 !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(4):hover {
+        border-color: #4ADE80 !important;
+        transform: translateY(-2px);
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(4):has(input:checked),
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(4)[data-checked="true"] {
+        background: linear-gradient(135deg, #16A34A 0%, #15803D 100%) !important;
+        border: 6px solid #BBF7D0 !important;
+        box-shadow: 0 6px 16px rgba(22, 163, 74, 0.35) !important;
+    }
+
+    /* BUTTON 5: 3️⃣ About The App -> Peach / Coral */
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(5) {
+        background-color: #FFF7ED !important;
+        border: 6px solid #FED7AA !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(5):hover {
+        border-color: #FB923C !important;
+        transform: translateY(-2px);
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(5):has(input:checked),
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(5)[data-checked="true"] {
+        background: linear-gradient(135deg, #EA580C 0%, #C2410C 100%) !important;
+        border: 6px solid #FED7AA !important;
+        box-shadow: 0 6px 16px rgba(234, 88, 12, 0.35) !important;
+    }
+
+    /* BUTTON 6: 📚 User Guide -> Royal Purple */
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(6) {
+        background-color: #FAF5FF !important;
+        border: 6px solid #E9D5FF !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(6):hover {
+        border-color: #C084FC !important;
+        transform: translateY(-2px);
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(6):has(input:checked),
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(6)[data-checked="true"] {
+        background: linear-gradient(135deg, #9333EA 0%, #7E22CE 100%) !important;
+        border: 6px solid #E9D5FF !important;
+        box-shadow: 0 6px 16px rgba(147, 51, 234, 0.35) !important;
+    }
+
+    [data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p,
+    [data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] p {
+        color: #FFFFFF !important;
+        font-weight: 900 !important;
+    }
+    
+    /* Default cards */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background-color: #FFFFFF !important;
+        border: 1px solid #CBD5E1 !important;
+        border-radius: 12px !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
+    }
+
+    /* =========================================================
+       TELEMETRY METRIC CARDS (Custom Direct Selectors)
+       ========================================================= */
+    /* Target any container with the corresponding card class */
+    div:has(> .telemetry-card-1),
+    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-1) {
+        background-color: #F0F9FF !important;
+        border: 6px solid #BAE6FD !important;
+        border-radius: 24px !important;
+        box-shadow: 0 6px 16px rgba(186, 230, 253, 0.45) !important;
+        transition: transform 0.2s ease !important;
+    }
+    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-1):hover {
+        border-color: #38BDF8 !important;
+        transform: translateY(-2px);
+    }
+
+    div:has(> .telemetry-card-2),
+    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-2) {
+        background-color: #FFF1F2 !important;
+        border: 6px solid #FECDD3 !important;
+        border-radius: 24px !important;
+        box-shadow: 0 6px 16px rgba(254, 205, 211, 0.45) !important;
+        transition: transform 0.2s ease !important;
+    }
+    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-2):hover {
+        border-color: #FB7185 !important;
+        transform: translateY(-2px);
+    }
+
+    div:has(> .telemetry-card-3),
+    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-3) {
+        background-color: #F0FDF4 !important;
+        border: 6px solid #BBF7D0 !important;
+        border-radius: 24px !important;
+        box-shadow: 0 6px 16px rgba(187, 247, 208, 0.45) !important;
+        transition: transform 0.2s ease !important;
+    }
+    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-3):hover {
+        border-color: #4ADE80 !important;
+        transform: translateY(-2px);
+    }
+
+    div:has(> .telemetry-card-4),
+    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-4) {
+        background-color: #FEFCE8 !important;
+        border: 6px solid #FEF08A !important;
+        border-radius: 24px !important;
+        box-shadow: 0 6px 16px rgba(254, 240, 138, 0.45) !important;
+        transition: transform 0.2s ease !important;
+    }
+    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-4):hover {
+        border-color: #FACC15 !important;
+        transform: translateY(-2px);
+    }
+
+    /* Buttons & standard form controls */
+    div.stButton > button {
+        background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%) !important;
+        color: #FFFFFF !important;
+        border: 1px solid #0284C7 !important;
+        border-radius: 8px !important;
+        font-weight: 700 !important;
+        font-size: 1.05rem !important;
+        padding: 0.6rem 1.3rem !important;
+        box-shadow: 0 2px 4px rgba(2, 132, 199, 0.2) !important;
+        transition: all 0.2s ease !important;
+    }
+    div.stButton > button:hover {
+        background: linear-gradient(135deg, #0369A1 0%, #075985 100%) !important;
+        box-shadow: 0 4px 10px rgba(2, 132, 199, 0.35) !important;
+    }
+    div.stButton > button p, div.stButton > button span {
+        color: #FFFFFF !important;
+        font-weight: 700 !important;
+    }
+    .stTextArea textarea {
+        background-color: #FFFFFF !important;
+        border: 2px solid #CBD5E1 !important;
+        color: #0F172A !important;
+        border-radius: 8px !important;
+        font-family: 'Consolas', 'Courier New', monospace !important;
+        font-size: 1.0rem !important;
+        font-weight: 500 !important;
+    }
+    .stTextInput input {
+        background-color: #FFFFFF !important;
+        border: 2px solid #CBD5E1 !important;
+        color: #0F172A !important;
+        border-radius: 8px !important;
+        font-size: 1.0rem !important;
         font-weight: 600 !important;
     }
-
-    /* 6. Base Card Containers */
-    [data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #0a2533 !important;
-        border: 1px solid #1b4b61 !important;
-        border-radius: 10px;
-    }
-
-    /* 7. Dropdown / Selectbox Dark Styling (Filter by Month) */
     div[data-baseweb="select"] {
-        background-color: #09202c !important;
-        border: 1px solid #1b4b61 !important;
+        background-color: #FFFFFF !important;
+        border: 2px solid #CBD5E1 !important;
         border-radius: 8px !important;
     }
     div[data-baseweb="select"] * {
         background-color: transparent !important;
-        color: #ffffff !important;
+        color: #0F172A !important;
+        font-weight: 600 !important;
     }
-    div[data-baseweb="popover"] ul {
-        background-color: #09202c !important;
-        border: 1px solid #1b4b61 !important;
+    [data-testid="stFileUploader"] section {
+        background-color: #F8FAFC !important;
+        border: 2px dashed #94A3B8 !important;
+        border-radius: 8px !important;
+        color: #1E293B !important;
     }
-
-    /* 8. Badges (Bug ID, Verified, Filter Box) */
+    div[data-testid="stAlert"] {
+        background-color: #FFFFFF !important;
+        border: 2px solid #0284C7 !important;
+        border-radius: 10px !important;
+        padding: 16px 20px !important;
+        box-shadow: 0 2px 6px rgba(2, 132, 199, 0.1) !important;
+    }
     .badge-bug-id {
-        background: rgba(56, 189, 248, 0.15);
-        color: #38bdf8;
-        border: 1px solid rgba(56, 189, 248, 0.4);
-        padding: 4px 10px;
-        border-radius: 6px;
-        font-weight: 700;
-        font-size: 0.78rem;
-        font-family: monospace;
-    }
-    .badge-verified-kb {
-        background: rgba(34, 197, 94, 0.15);
-        color: #4ade80;
-        border: 1px solid rgba(34, 197, 94, 0.5);
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-weight: 600;
-        font-size: 0.75rem;
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-    }
-    .badge-pending {
-        background: rgba(245, 158, 11, 0.15);
-        color: #fbbf24;
-        border: 1px solid rgba(245, 158, 11, 0.5);
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-weight: 600;
-        font-size: 0.75rem;
-    }
-    .badge-unresolved {
-        background: rgba(239, 68, 68, 0.15);
-        color: #f87171;
-        border: 1px solid rgba(239, 68, 68, 0.5);
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-weight: 600;
-        font-size: 0.75rem;
+        background-color: #FFFFFF !important;
+        color: #0284C7 !important;
+        border: 2px solid #0284C7 !important;
+        padding: 6px 14px !important;
+        border-radius: 8px !important;
+        font-family: 'Consolas', 'Courier New', monospace !important;
+        font-size: 1.05rem !important;
+        font-weight: 800 !important;
+        display: inline-block !important;
     }
     .badge-filter-box {
-        background: rgba(56, 189, 248, 0.12);
-        color: #38bdf8;
-        border: 1px solid rgba(56, 189, 248, 0.35);
-        padding: 4px 10px;
-        border-radius: 6px;
-        font-weight: 600;
-        font-size: 0.8rem;
+        background: #E0F2FE !important;
+        color: #0369A1 !important;
+        border: 1px solid #BAE6FD !important;
+        padding: 6px 12px !important;
+        border-radius: 6px !important;
+        font-weight: 700 !important;
+        font-size: 0.95rem !important;
         display: inline-block;
         margin-bottom: 6px;
     }
-    /* --- Style the Text Area --- */
-    .stTextArea textarea {
-        background-color: #2dd4bf !important;
-        border: 1px solid #1b4b61 !important;
-        color: #e2e8f0 !important;
-        border-radius: 8px !important;
-        font-family: 'Consolas', 'Courier New', monospace !important;
-        font-size: 0.88rem !important;
-    }
-    .stTextArea textarea:focus {
-        border-color: #f8fafc !important;
-        box-shadow: 0 0 8px rgba(56, 189, 248, 0.3) !important;
-    }
-    /* Metric Upper Labels (Severity, Priority, Component) */
-    [data-testid="stMetricLabel"] p, 
-    [data-testid="stMetricLabel"] span {
-        color: #D1D5DB !important;  /* Light Gray */
-        font-weight: 600 !important;
-    }
-
-    /* Metric Big Values (Low, Interpreter, etc.) */
-    [data-testid="stMetricValue"] div {
-        color: #4ADE80 !important;  /* Soft Mint Green */
+    .badge-verified-kb {
+        background: #DCFCE7 !important;
+        color: #15803D !important;
+        border: 1px solid #86EFAC !important;
+        padding: 6px 14px !important;
+        border-radius: 20px !important;
         font-weight: 700 !important;
+        font-size: 0.9rem !important;
+    }
+    .badge-unresolved {
+        background: #FEE2E2 !important;
+        color: #B91C1C !important;
+        border: 1px solid #FCA5A5 !important;
+        padding: 6px 14px !important;
+        border-radius: 20px !important;
+        font-weight: 700 !important;
+        font-size: 0.9rem !important;
+    }
+    .badge-pending {
+        background: #FEF3C7 !important;
+        color: #B45309 !important;
+        border: 1px solid #FDE68A !important;
+        padding: 6px 14px !important;
+        border-radius: 20px !important;
+        font-weight: 700 !important;
+        font-size: 0.9rem !important;
+    }
+    [data-testid="stSidebarUserContent"] {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+    .sidebar-bottom-anchor {
+        margin-top: auto !important;
+        padding-top: 20px;
+        border-top: 1px solid #CBD5E1;
+    }
+    .logout-btn-wrapper button {
+        background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%) !important;
+        color: #FFFFFF !important;
+        border: 1px solid #B91C1C !important;
+        font-weight: 700 !important;
+        width: 100% !important;
+        border-radius: 8px !important;
+        box-shadow: 0 2px 4px rgba(239, 68, 68, 0.25) !important;
+    }
+    .logout-btn-wrapper button:hover {
+        background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important;
     }
     </style>
     """,
     unsafe_allow_html=True
 )
 
+# =====================================================================
+# 🔐 AUTHENTICATION GATEWAY
+# =====================================================================
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+if "user_email" not in st.session_state:
+    st.session_state.user_email = ""
 
-page = st.sidebar.radio("Creation of Intelligent 🐞 Diagnosis Platform with Fix Recommendation Assistance", ["🏠 Dashboard","1️⃣Submit Bug", "2️⃣Analytics Dashboard","🧠Knowledge Base","3️⃣About The App","📚User Guide"])
+if not st.session_state.authenticated:
+    st.markdown("<br>", unsafe_allow_html=True)
+    col_l, col_center, col_r = st.columns([1, 1.5, 1])
+    
+    with col_center:
+        with st.container(border=True):
+            st.markdown("<h2 style='text-align: center; margin-bottom: 0;'>🔐 Secure Access Portal</h2>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center; font-size: 14px; margin-top: 4px;'>Intelligent 🐞 Bug Diagnosis Platform</p>", unsafe_allow_html=True)
+            st.divider()
+            
+            auth_mode = st.radio("Choose Action", ["Login", "Create Account"], horizontal=True, label_visibility="collapsed")
+            email_input = st.text_input("Email Address", placeholder="developer@company.com")
+            pass_input = st.text_input("Password", type="password", placeholder="Enter your password")
+            
+            if auth_mode == "Login":
+                if st.button("🚀 Log In", width="stretch"):
+                    if verify_user(email_input, pass_input):
+                        st.session_state.authenticated = True
+                        st.session_state.user_email = email_input.strip().lower()
+                        st.success("Login successful!")
+                        st.rerun()
+                    else:
+                        st.error("Invalid email or password.")
+            else:
+                if st.button("📝 Register New Account", width="stretch"):
+                    success, msg = register_user(email_input, pass_input)
+                    if success:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
+                        
+    st.stop()
 
+# =====================================================================
+# 🧭 SIDEBAR NAVIGATION
+# =====================================================================
+page = st.sidebar.radio(
+    "Creation of Intelligent 🐞 Diagnosis Platform with Fix Recommendation Assistance",
+    ["🏠 Dashboard", "1️⃣Submit Bug", "2️⃣Analytics Dashboard", "🧠Knowledge Base", "3️⃣About The App", "📚User Guide"]
+)
+
+st.sidebar.markdown('<div class="sidebar-bottom-anchor"></div>', unsafe_allow_html=True)
+with st.sidebar.container():
+    st.markdown(f"**👤 User:** `{st.session_state.user_email}`")
+    st.markdown('<div class="logout-btn-wrapper">', unsafe_allow_html=True)
+    if st.button("🚪 Log Out", key="sidebar_bottom_logout_btn", width="stretch"):
+        st.session_state.authenticated = False
+        st.session_state.user_email = ""
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# =====================================================================
+# 📄 PAGE 1: SUBMIT BUG
+# =====================================================================
 if page == "1️⃣Submit Bug":
     st.title(" Submit Defect logs")
     st.markdown('<span class="badge-filter-box">Paste your bug report or stack trace below - analysis runs automatically.</span>', unsafe_allow_html=True)
@@ -250,7 +639,6 @@ if page == "1️⃣Submit Bug":
 
     model, kb_embeddings, kb_metadata = load_retrieval_components()
 
-    # --- SIDE-BY-SIDE: Intake (Left) + Metadata Context (Right) ---
     col_intake, col_meta = st.columns([1.6, 1.1])
 
     with col_intake:
@@ -272,15 +660,8 @@ if page == "1️⃣Submit Bug":
                 label_visibility="collapsed"
             )
 
-            st.markdown('<span class="badge-filter-box">🎯 Similar Bugs Retrieval Depth</span>', unsafe_allow_html=True)
-            top_n = st.slider(
-                "Number of similar bugs to retrieve",
-                min_value=3,
-                max_value=15,
-                value=5,
-                key="top_n_slider",
-                label_visibility="collapsed"
-            )
+
+            
 
     with col_meta:
         with st.container(border=True):
@@ -294,10 +675,10 @@ if page == "1️⃣Submit Bug":
                 label_visibility="collapsed"
             )
             
-            st.caption("Reporter Name *")
+            st.caption("Reporter Email / Name *")
             reporter_name = st.text_input(
                 "Reporter Name", 
-                value="Developer", 
+                value=st.session_state.user_email, 
                 key="meta_rep_name", 
                 label_visibility="collapsed"
             )
@@ -317,8 +698,7 @@ if page == "1️⃣Submit Bug":
                 key="meta_group_num",
                 label_visibility="collapsed"
             )
-
-    # --- File/Text Input Parsing ---
+    top_n = st.session_state.get("top_n_slider", 5)
     final_text = ""
     if uploaded_file is not None:
         final_text = uploaded_file.read().decode("utf-8")
@@ -363,7 +743,7 @@ if page == "1️⃣Submit Bug":
         }
         st.session_state.bug_record = bug_record
 
-        # --- Step 1: Triage + Log Analysis ---
+        # Step 1: Triage + Log Analysis
         with st.spinner("Running Triage and Log Analysis..."):
             combined_result = run_orchestration(
                 title=final_text[:80],
@@ -376,7 +756,7 @@ if page == "1️⃣Submit Bug":
         triage_result = combined_result["triage"]
         log_result = combined_result["log_analysis"]
 
-        # --- Step 2: Retrieve similar historical bugs ---
+        # Step 2: Retrieve similar historical bugs
         with st.spinner("Retrieving similar historical bugs..."):
             try:
                 retrieved_bugs = retrieve_similar_bugs(
@@ -387,7 +767,7 @@ if page == "1️⃣Submit Bug":
                 st.session_state.retrieval_error = str(e)
             st.session_state.retrieved_bugs = retrieved_bugs
 
-        # --- Step 3: Root Cause Agent ---
+        # Step 3: Root Cause Agent
         with st.spinner("Analyzing root cause..."):
             try:
                 root_cause_result = root_cause_agent(
@@ -408,7 +788,7 @@ if page == "1️⃣Submit Bug":
                 }
             st.session_state.root_cause_result = root_cause_result
 
-        # --- Step 4: Duplicate Detection Agent ---
+        # Step 4: Duplicate Detection Agent
         with st.spinner("Checking for duplicate submissions..."):
             try:
                 duplicate_result = duplicate_detection_agent(
@@ -424,7 +804,7 @@ if page == "1️⃣Submit Bug":
                 st.session_state.duplicate_error = str(e)
             st.session_state.duplicate_result = duplicate_result
 
-        # --- Step 5: Remediation Agent ---
+        # Step 5: Remediation Agent
         with st.spinner("Generating fix recommendation..."):
             try:
                 remediation_result = remediation_agent(
@@ -449,7 +829,7 @@ if page == "1️⃣Submit Bug":
                 }
             st.session_state.remediation_result = remediation_result
 
-        # --- Step 6: Save to SQLite (both bug_submissions.db AND Developer_Submission.db) ---
+        # Step 6: Save to SQLite
         with st.spinner("Saving submission..."):
             simple_view_for_db = build_simple_view(combined_result)
             save_submission(
@@ -460,7 +840,6 @@ if page == "1️⃣Submit Bug":
                 recommended_fix=remediation_result["recommended_fix"]
             )
             
-            # Auto-save Developer Metadata to Developer_Submission.db
             try:
                 conn = sqlite3.connect(DEV_DB_PATH)
                 cursor = conn.cursor()
@@ -474,7 +853,7 @@ if page == "1️⃣Submit Bug":
             except Exception as e:
                 st.warning(f"Could not log metadata context: {e}")
 
-    # --- Display results (uses whatever was last analyzed, from session_state) ---
+    # Display Results
     if st.session_state.combined_result is not None:
         bug_record = st.session_state.bug_record
         combined_result = st.session_state.combined_result
@@ -485,7 +864,6 @@ if page == "1️⃣Submit Bug":
         remediation_result = st.session_state.remediation_result
 
         st.success("Bug report received and analyzed")
-
         st.subheader("Analysis Summary")
 
         col1, col2, col3 = st.columns(3)
@@ -583,95 +961,114 @@ if page == "1️⃣Submit Bug":
             if remediation_result.get("references_used"):
                 st.write("**References Used:**")
                 for ref in remediation_result["references_used"]:
-                    match = ref.get("match")
-                    similarity = ref.get("similarity")
-                    if match and similarity is not None:
-                        match_info = f" ({match}, {similarity*100:.0f}%)"
-                    elif match:
-                        match_info = f" ({match})"
-                    else:
-                        match_info = ""
+                    match_info = f" ({ref['match']}, {ref['similarity']*100:.0f}%)" if "match" in ref else ""
                     st.write(f"- `{ref['bug_id']}`{match_info} — {ref.get('summary', '')}")
 
-            # --- Confirm Fix Outcome (KB growth mechanism) ---
-            # This sits at the same level as the "references_used" check above,
-            # both as direct children of "if remediation_result:" — so it always
-            # renders regardless of whether references_used happened to be empty.
-            st.divider()
+        # =====================================================================
+        # 🎯 PLACED DIRECTLY BELOW REMEDIATION: SLIDER & SIMILAR PAST BUGS
+        # =====================================================================
+        # st.divider()
+        # st.subheader("🔍 Similar Past Bugs (Historical Knowledge Base)")
 
-            st.subheader("Confirm Fix Outcome")
+        # st.markdown('<span class="badge-filter-box">🎯 Similar Bugs Retrieval Depth</span>', unsafe_allow_html=True)
+        # top_n = st.slider(
+        #     "Number of similar bugs to retrieve",
+        #     min_value=3,
+        #     max_value=15,
+        #     value=st.session_state.get("top_n_slider", 5),
+        #     key="top_n_slider",
+        #     label_visibility="collapsed"
+        # )
 
-            current_bug_id = bug_record["bug_id"]
-            status_key = f"fix_status_{current_bug_id}"
+        # if retrieved_bugs:
+        #     for rank, r in enumerate(retrieved_bugs[:top_n], 1):
+        #         with st.container(border=True):
+        #             st.write(f"**{rank}. {r['title']}**")
+        #             st.caption(f"Severity: `{r['severity']}` | Source: `{r['source_dataset']}` | Similarity: `{r['similarity']:.2f}`")
+        # else:
+        #     st.info("No similar historical bugs were retrieved.")
 
-            if status_key not in st.session_state:
-                st.session_state[status_key] = None
+        # =====================================================================
+        # 📋 CONFIRM FIX OUTCOME & SUBMISSION RECORD
+        # =====================================================================
+        st.divider()
+        st.subheader("Confirm Fix Outcome")
+        current_bug_id = bug_record["bug_id"]
+        status_key = f"fix_status_{current_bug_id}"
 
-            if st.session_state[status_key] is None:
-                col_worked, col_not_worked = st.columns(2)
+        if status_key not in st.session_state:
+            st.session_state[status_key] = None
 
-                with col_worked:
-                    if st.button("✅ Fix Worked", key=f"worked_{current_bug_id}"):
-                        db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "bug_submissions.db")
-                        try:
-                            add_resolved_bug_to_kb(
-                                bug_id=current_bug_id,
-                                description=bug_record["description"],
-                                error_type=simple_view["error_type"],
-                                severity=simple_view["severity"],
-                                recommended_fix=remediation_result["recommended_fix"]
-                            )
+        if st.session_state[status_key] is None:
+            col_worked, col_not_worked = st.columns(2)
 
-                            conn = sqlite3.connect(db_path)
-                            cursor = conn.cursor()
-                            cursor.execute("UPDATE bug_submissions SET status = ? WHERE bug_id = ?", ("resolved_added_to_kb", current_bug_id))
-                            conn.commit()
-                            conn.close()
+            with col_worked:
+                if st.button("✅ Fix Worked", key=f"worked_{current_bug_id}"):
+                    try:
+                        add_resolved_bug_to_kb(
+                            bug_id=current_bug_id,
+                            description=bug_record["description"],
+                            error_type=simple_view["error_type"],
+                            severity=simple_view["severity"],
+                            recommended_fix=remediation_result["recommended_fix"]
+                        )
 
-                            st.cache_resource.clear()
-
-                            st.session_state[status_key] = "resolved_added_to_kb"
-                            st.success("Marked as resolved — added to knowledge base for future recommendations.")
-                            st.rerun()
-
-                        except Exception as e:
-                            conn = sqlite3.connect(db_path)
-                            cursor = conn.cursor()
-                            cursor.execute("UPDATE bug_submissions SET status = ? WHERE bug_id = ?", ("resolved_kb_append_failed", current_bug_id))
-                            conn.commit()
-                            conn.close()
-
-                            st.session_state[status_key] = "resolved_kb_append_failed"
-                            st.error(f"Fix marked as resolved, but adding it to the knowledge base failed: {e}")
-                            st.rerun()
-
-                with col_not_worked:
-                    if st.button("❌ Fix Did Not Work", key=f"notworked_{current_bug_id}"):
-                        db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "bug_submissions.db")
-                        conn = sqlite3.connect(db_path)
+                        conn = sqlite3.connect(BUG_DB_PATH)
                         cursor = conn.cursor()
-                        cursor.execute("UPDATE bug_submissions SET status = ? WHERE bug_id = ?", ("unresolved", current_bug_id))
+                        cursor.execute("UPDATE bug_submissions SET status = ? WHERE bug_id = ?", ("resolved_added_to_kb", current_bug_id))
                         conn.commit()
                         conn.close()
 
-                        st.session_state[status_key] = "unresolved"
-                        st.info("Marked as unresolved — not added to the knowledge base.")
+                        st.cache_resource.clear()
+                        st.session_state[status_key] = "resolved_added_to_kb"
+                        st.success("Marked as resolved — added to knowledge base for future recommendations.")
                         st.rerun()
 
-            else:
-                status_display = {
-                    "resolved_added_to_kb": "✅ Resolved — added to knowledge base",
-                    "resolved_kb_append_failed": "⚠️ Resolved, but knowledge base update failed",
-                    "unresolved": "❌ Marked as unresolved"
-                }
-                st.write(f"**Status:** {status_display.get(st.session_state[status_key], st.session_state[status_key])}")
+                    except Exception as e:
+                        conn = sqlite3.connect(BUG_DB_PATH)
+                        cursor = conn.cursor()
+                        cursor.execute("UPDATE bug_submissions SET status = ? WHERE bug_id = ?", ("resolved_kb_append_failed", current_bug_id))
+                        conn.commit()
+                        conn.close()
+
+                        st.session_state[status_key] = "resolved_kb_append_failed"
+                        st.error(f"Fix marked as resolved, but adding it to the knowledge base failed: {e}")
+                        st.rerun()
+
+            with col_not_worked:
+                if st.button("❌ Fix Did Not Work", key=f"notworked_{current_bug_id}"):
+                    conn = sqlite3.connect(BUG_DB_PATH)
+                    cursor = conn.cursor()
+                    cursor.execute("UPDATE bug_submissions SET status = ? WHERE bug_id = ?", ("unresolved", current_bug_id))
+                    conn.commit()
+                    conn.close()
+
+                    st.session_state[status_key] = "unresolved"
+                    st.info("Marked as unresolved — not added to the knowledge base.")
+                    st.rerun()
+
+        else:
+            status_display = {
+                "resolved_added_to_kb": "✅ Resolved — added to knowledge base",
+                "resolved_kb_append_failed": "⚠️ Resolved, but knowledge base update failed",
+                "unresolved": "❌ Marked as unresolved"
+            }
+            st.write(f"**Status:** {status_display.get(st.session_state[status_key], st.session_state[status_key])}")
 
         st.divider()
-
         st.subheader("Submitted Bug Record")
         st.json(bug_record)
 
         st.subheader(f"Similar Past Bugs (Historical Knowledge Base, Top {top_n})")
+        st.markdown('<span class="badge-filter-box">🎯 Similar Bugs Retrieval Depth</span>', unsafe_allow_html=True)
+        top_n = st.slider(
+                    "Number of similar bugs to retrieve",
+                    min_value=3,
+                    max_value=15,
+                    value=st.session_state.get("top_n_slider", 5),
+                    key="top_n_slider",
+                    label_visibility="collapsed"
+                )
         if retrieved_bugs:
             for rank, r in enumerate(retrieved_bugs, 1):
                 st.write(f"**{rank}. {r['title']}**")
@@ -680,13 +1077,14 @@ if page == "1️⃣Submit Bug":
         else:
             st.info("No similar historical bugs were retrieved.")
 
-
+# =====================================================================
+# 📊 PAGE 2: ANALYTICS DASHBOARD
+# =====================================================================
 elif page == "2️⃣Analytics Dashboard":
     st.subheader("Defect Pattern Analytics")
 
     if st.button("🔄 Refresh Analytics", key="refresh_analytics_btn"):
-        db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "bug_submissions.db")
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(BUG_DB_PATH)
         analytics_df = pd.read_sql("SELECT * FROM bug_submissions", conn)
         conn.close()
 
@@ -697,7 +1095,6 @@ elif page == "2️⃣Analytics Dashboard":
     if "analytics_result" in st.session_state:
         result = st.session_state.analytics_result
 
-        # --- Dynamic Data Extraction for Top 1 Metrics ---
         top_sev_label, top_sev_pct = "N/A", "0%"
         if result.get("severity_breakdown") and len(result["severity_breakdown"]) > 0:
             sorted_sev = sorted(result["severity_breakdown"], key=lambda x: x["count"], reverse=True)
@@ -716,7 +1113,6 @@ elif page == "2️⃣Analytics Dashboard":
             top_rc_label = top_rc["label"]
             top_rc_count = f"{top_rc['count']} bugs ({top_rc['percent']}%)"
 
-        # --- 1. Top Analytics Metric Ribbon (5 Columns with Emojis) ---
         m1, m2, m3, m4, m5 = st.columns(5)
         
         with m1:
@@ -756,7 +1152,7 @@ elif page == "2️⃣Analytics Dashboard":
 
         st.divider()
 
-        # --- 2. Side-by-Side Breakdown Charts with Pink & Bright High-Contrast Text ---
+        # Side-by-Side Breakdown Charts
         c_sev, c_comp = st.columns([1.5, 3])
 
         with c_sev:
@@ -775,12 +1171,12 @@ elif page == "2️⃣Analytics Dashboard":
                     fig_severity.update_layout(
                         paper_bgcolor='rgba(0,0,0,0)',
                         plot_bgcolor='rgba(0,0,0,0)',
-                        font=dict(color='#f472b6', size=12), # Vibrant pink text for clear visibility
+                        font=dict(color='#f472b6', size=12),
                         legend=dict(font=dict(color='#f472b6', size=11)),
                         margin=dict(t=20, b=20, l=10, r=10),
                         height=360
                     )
-                    st.plotly_chart(fig_severity, use_container_width=True)
+                    st.plotly_chart(fig_severity, width="stretch")
                 else:
                     st.info("No severity records available.")
 
@@ -800,18 +1196,18 @@ elif page == "2️⃣Analytics Dashboard":
                     fig_component.update_layout(
                         paper_bgcolor='rgba(0,0,0,0)',
                         plot_bgcolor='rgba(0,0,0,0)',
-                        font=dict(color='#ff79c6', size=11), # High-contrast Pink Legend & Labels
+                        font=dict(color='#ff79c6', size=11),
                         legend=dict(font=dict(color='#ff79c6', size=11)),
                         margin=dict(t=20, b=20, l=10, r=10),
                         height=360
                     )
-                    st.plotly_chart(fig_component, use_container_width=True)
+                    st.plotly_chart(fig_component, width="stretch")
                 else:
                     st.info("No component records available.")
 
         st.divider()
 
-        # --- 3. Root Cause Patterns & Fix Mitigations (Equal Height with Badges) ---
+        # Root Cause Patterns & Fix Mitigations
         col_rc, col_fixes = st.columns([1.1, 1.0])
 
         with col_rc:
@@ -834,8 +1230,7 @@ elif page == "2️⃣Analytics Dashboard":
                 with rf_slide_col:
                     limit_fixes = st.slider("Count", min_value=2, max_value=8, value=3, key="limit_fixes_slider")
 
-                db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "bug_submissions.db")
-                conn = sqlite3.connect(db_path)
+                conn = sqlite3.connect(BUG_DB_PATH)
                 recent_fixes_df = pd.read_sql(
                     f"SELECT bug_id, recommended_fix, root_cause_hypothesis, status, timestamp FROM bug_submissions WHERE recommended_fix IS NOT NULL AND recommended_fix != '' ORDER BY timestamp DESC LIMIT {limit_fixes}", 
                     conn
@@ -845,7 +1240,6 @@ elif page == "2️⃣Analytics Dashboard":
                 if not recent_fixes_df.empty:
                     for _, row in recent_fixes_df.iterrows():
                         with st.container(border=True):
-                            # Styled Bug ID & Status Pills (No white background)
                             ts = row['timestamp'][:10] if row['timestamp'] else ''
                             status_val = row['status'] or 'pending'
                             
@@ -875,7 +1269,7 @@ elif page == "2️⃣Analytics Dashboard":
 
         st.divider()
 
-       # --- 4. Monthly Activity Chart with Styled Filter Box ---
+        # Monthly Activity Chart
         with st.container(border=True):
             chart_head_col, chart_filter_col = st.columns([2.6, 1.4])
             
@@ -918,19 +1312,35 @@ elif page == "2️⃣Analytics Dashboard":
                         x="date", 
                         y="count",
                         text="count",
-                        color_discrete_sequence=['#38bdf8']
+                        color_discrete_sequence=['#0284C7']
                     )
-                    fig_activity.update_traces(textposition='outside', textfont=dict(color='#ffffff'))
+                    fig_activity.update_traces(
+                        textposition='outside', 
+                        textfont=dict(color='#0F172A', size=14)
+                    )
                     fig_activity.update_layout(
                         paper_bgcolor='rgba(0,0,0,0)',
                         plot_bgcolor='rgba(0,0,0,0)',
-                        font=dict(color='#ff79c6'),
-                        margin=dict(t=30, b=20, l=10, r=10),
-                        height=300,
-                        xaxis=dict(gridcolor='#1b4b61', title=dict(text="Date", font=dict(color="#ffffff")), tickfont=dict(color="#e2e8f0")),
-                        yaxis=dict(gridcolor='#1b4b61', title=dict(text="Defect Count", font=dict(color="#ffffff")), tickfont=dict(color="#e2e8f0"))
+                        margin=dict(t=40, b=40, l=40, r=20),
+                        height=420,
+                        xaxis=dict(
+                            showgrid=True,
+                            gridcolor='#E2E8F0',
+                            linecolor='#334155',
+                            linewidth=2,
+                            title=dict(text="Submission Date", font=dict(color="#0F172A", size=14)),
+                            tickfont=dict(color="#0F172A", size=12)
+                        ),
+                        yaxis=dict(
+                            showgrid=True,
+                            gridcolor='#E2E8F0',
+                            linecolor='#334155',
+                            linewidth=2,
+                            title=dict(text="Defect Count", font=dict(color="#0F172A", size=14)),
+                            tickfont=dict(color="#0F172A", size=12)
+                        )
                     )
-                    st.plotly_chart(fig_activity, use_container_width=True)
+                    st.plotly_chart(fig_activity, width="stretch")
                 else:
                     st.warning(f"No submission activity logged for {selected_month}.")
             else:
@@ -939,9 +1349,9 @@ elif page == "2️⃣Analytics Dashboard":
     else:
         st.info("Click 'Refresh Analytics' to compute the current defect pattern analytics.")
 
-
-
-
+# =====================================================================
+# 📖 PAGE 3: ABOUT THE APP
+# =====================================================================
 elif page == "3️⃣About The App":
     st.title("About the App")
     md_path = PROJECT_ROOT / "README.md"
@@ -950,6 +1360,9 @@ elif page == "3️⃣About The App":
     else:
         st.warning("`README.md` not found in project root.")
 
+# =====================================================================
+# 📚 PAGE 4: USER GUIDE
+# =====================================================================
 elif page == "📚User Guide":
     st.title("📚 User Guide")
     md_path = PROJECT_ROOT / "docs" / "User_guide.md"
@@ -958,44 +1371,33 @@ elif page == "📚User Guide":
     else:
         st.warning("`docs/User_guide.md` not found.")
 
+# =====================================================================
+# 🧠 PAGE 5: KNOWLEDGE BASE
+# =====================================================================
 elif page == "🧠Knowledge Base":
     st.title("🧠 Knowledge Base Repository")
     st.caption("Aggregated vector repository and historical resolutions.")
 
-    # =========================================================================
-    # 🔴 PATH CONFIGURATION (Set your CSV & DB paths)
-    # =========================================================================
-    BASE_DIR = Path(__file__).resolve().parent.parent
-    KB_CSV_PATH = BASE_DIR / "data"/"knowledge_base_with_severity.csv"
-    # KB_CSV_PATH =Path(__file__).resolve().parent / "data" / "knowledge_base_with_severity.csv"
-    BUG_DB_PATH = Path(__file__).resolve().parent / "data" / "bug_submissions.db"
-    
-    # Fallback to parent dir if DB is located in ../data/
-    if not BUG_DB_PATH.exists():
-        BUG_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "bug_submissions.db"
+    KB_CSV_PATH = PROJECT_ROOT / "data" / "knowledge_base_with_severity.csv"
 
     if os.path.exists(KB_CSV_PATH):
         kb_df = pd.read_csv(KB_CSV_PATH)
-
-        # ---------------------------------------------------------
-        # 1. Metric Calculations
-        # ---------------------------------------------------------
-        # Total Size of Initial KB
         total_kb_size = len(kb_df)
 
-        # Count of New Fixed Rows Added Till Now (Queried from SQLite)
         total_fixed_till_now = 0
         if BUG_DB_PATH.exists():
             try:
                 conn = sqlite3.connect(BUG_DB_PATH)
                 cursor = conn.cursor()
-                cursor.execute("SELECT COUNT(*) FROM bug_submissions WHERE status = 'resolved_added_to_kb'")
+                cursor.execute("""
+                    SELECT COUNT(*) FROM bug_submissions 
+                    WHERE status = 'resolved_added_to_kb'
+                """)
                 total_fixed_till_now = cursor.fetchone()[0]
                 conn.close()
-            except Exception as e:
+            except Exception:
                 total_fixed_till_now = 0
 
-        # Most Frequent Severity
         sev_col = next((c for c in kb_df.columns if "severity_mapped" in c.lower()), None)
         if sev_col and not kb_df[sev_col].dropna().empty:
             top_severity = kb_df[sev_col].mode().iloc[0]
@@ -1004,7 +1406,6 @@ elif page == "🧠Knowledge Base":
             top_severity = "N/A"
             top_severity_count = 0
 
-        # Most Frequent Component
         comp_col = next((c for c in kb_df.columns if any(k in c.lower() for k in ["component", "module", "service"])), None)
         if comp_col and not kb_df[comp_col].dropna().empty:
             top_component = kb_df[comp_col].mode().iloc[0]
@@ -1013,9 +1414,6 @@ elif page == "🧠Knowledge Base":
             top_component = "N/A"
             top_component_count = 0
 
-        # ---------------------------------------------------------
-        # 2. Top 4 Metric Ribbon Cards
-        # ---------------------------------------------------------
         k1, k2, k3, k4 = st.columns(4)
 
         with k1:
@@ -1044,53 +1442,45 @@ elif page == "🧠Knowledge Base":
 
         st.divider()
 
-        # ---------------------------------------------------------
-        # 3. Interactive Search & Knowledge Base Table
-        # ---------------------------------------------------------
         with st.container(border=True):
             tb_col1, tb_col2 = st.columns([2.5, 1.5])
             with tb_col1:
                 st.markdown("##### 📋 Knowledge Base Records")
             with tb_col2:
-                search_query = st.text_input("🔍 Search KB", placeholder="Filter by keyword, fix, or module...", label_visibility="collapsed")
+                search_query = st.text_input("🔍 Search KB", placeholder="🔍 Filter by keyword, fix, or module...", label_visibility="collapsed")
 
             display_df = kb_df
             if search_query.strip():
                 mask = display_df.astype(str).apply(lambda row: row.str.contains(search_query, case=False, na=False).any(), axis=1)
                 display_df = display_df[mask]
 
-            st.dataframe(display_df, use_container_width=True, height=450)
+            st.dataframe(display_df, width="stretch", height=450)
             st.caption(f"Showing {len(display_df)} base records + {total_fixed_till_now} dynamic verified fixes.")
 
     else:
         st.error(f"❌ File not found at: `{KB_CSV_PATH}`. Please check the path.")
 
+# =====================================================================
+# 🏠 PAGE 6: TELEMETRY DASHBOARD
+# =====================================================================
 elif page == "🏠 Dashboard":
     st.title("📊 Telemetry Dashboard")
-    st.caption("Real-time telemetry of ingested defect tickets and resolution tracking.")
+    st.markdown('<p style="font-size: 16px; color: #FF4B4B; font-weight: 600;">Real-time telemetry of ingested defect tickets and resolution tracking.</p>', unsafe_allow_html=True)
 
-    # ---------------------------------------------------------
-    # Database Paths
-    # ---------------------------------------------------------
-    BASE_DIR = Path(__file__).resolve().parent
-    BUG_DB_PATH = BASE_DIR / "data" / "bug_submissions.db"
-    DEV_DB_PATH = BASE_DIR / "data" / "Developer_Submission.db"
-
-    # Fallback checks
-    if not BUG_DB_PATH.exists():
-        BUG_DB_PATH = BASE_DIR.parent / "data" / "bug_submissions.db"
-    if not DEV_DB_PATH.exists():
-        DEV_DB_PATH = BASE_DIR.parent / "data" / "Developer_Submission.db"
-
-    # ---------------------------------------------------------
-    # 1. Fetch Data & Calculate 4 Key Metrics
-    # ---------------------------------------------------------
     total_bugs = 0
     total_critical = 0
-    solved_critical = 0
-    top_dev_name = "N/A"
+    total_kb_size = 29161
+    top_dev_name = "Developer"
     top_dev_count = 0
     submissions_df = pd.DataFrame()
+
+    kb_csv_path = PROJECT_ROOT / "data" / "knowledge_base_with_severity.csv"
+    if kb_csv_path.exists():
+        try:
+            kb_df = pd.read_csv(kb_csv_path)
+            total_kb_size = len(kb_df)
+        except Exception:
+            pass
 
     if BUG_DB_PATH.exists():
         try:
@@ -1100,21 +1490,16 @@ elif page == "🏠 Dashboard":
 
             if not submissions_df.empty:
                 total_bugs = len(submissions_df)
-                
-                # Critical bug calculations
-                crit_mask = submissions_df['severity'].astype(str).str.lower() == 'critical'
-                total_critical = int(crit_mask.sum())
-                
-                solved_crit_mask = crit_mask & (submissions_df['status'].astype(str) == 'resolved_added_to_kb')
-                solved_critical = int(solved_crit_mask.sum())
+                if 'severity' in submissions_df.columns:
+                    crit_mask = submissions_df['severity'].astype(str).str.lower().str.strip().isin(['critical', 'blocker', 'fatal'])
+                    total_critical = int(crit_mask.sum())
         except Exception as e:
-            st.error(f"Error reading bug database: {e}")
+            submissions_df = pd.DataFrame()
 
-    # Query Developer Submissions for Top Reporter
     if DEV_DB_PATH.exists():
         try:
             conn_dev = sqlite3.connect(DEV_DB_PATH)
-            dev_df = pd.read_sql("SELECT reporter_name, bug_id FROM Developer_Submission", conn_dev)
+            dev_df = pd.read_sql("SELECT reporter_name FROM Developer_Submission", conn_dev)
             conn_dev.close()
 
             if not dev_df.empty and 'reporter_name' in dev_df.columns:
@@ -1123,44 +1508,116 @@ elif page == "🏠 Dashboard":
                 if not clean_devs.empty:
                     top_dev_name = clean_devs.mode().iloc[0]
                     top_dev_count = int((clean_devs == top_dev_name).sum())
-        except Exception as e:
+        except Exception:
             pass
 
-    # ---------------------------------------------------------
-    # 2. Top Metric Ribbon (4 SaaS Cards)
-    # ---------------------------------------------------------
+    if top_dev_count == 0 and total_bugs > 0:
+        top_dev_name = st.session_state.get("user_email", "Developer").split("@")[0]
+        top_dev_count = total_bugs
+
+    
+    
+    # Metric Ribbon (Direct Squircle HTML Cards with 6px Thick Borders)
     m1, m2, m3, m4 = st.columns(4)
 
     with m1:
-        with st.container(border=True):
-            st.caption("📁 TOTAL SUBMITTED")
-            st.markdown(f"<h3 style='margin:0; color:#38bdf8;'>🐞 {total_bugs}</h3>", unsafe_allow_html=True)
-            st.caption("All Ingested Tickets")
+        st.markdown(f"""
+        <div style="background-color: #F0F9FF; border: 6px solid #BAE6FD; border-radius: 22px; padding: 16px 20px; box-shadow: 0 4px 12px rgba(186, 230, 253, 0.4); min-height: 145px;">
+            <p style="font-size: 14px; color: #0369A1; margin: 0; font-weight: 800; letter-spacing: 0.5px;">📁 TOTAL SUBMITTED</p>
+            <h2 style="margin: 8px 0; color: #0284C7; font-size: 2.1rem; font-weight: 900;">🐞 {total_bugs}</h2>
+            <p style="font-size: 13px; color: #475569; margin: 0; font-weight: 600;">All Ingested Tickets</p>
+        </div>
+        """, unsafe_allow_html=True)
 
     with m2:
-        with st.container(border=True):
-            st.caption("🚨 CRITICAL BUGS")
-            st.markdown(f"<h3 style='margin:0; color:#f87171;'>🔥 {total_critical}</h3>", unsafe_allow_html=True)
-            st.caption("Fatal & Blocker Defects")
+        st.markdown(f"""
+        <div style="background-color: #FFF1F2; border: 6px solid #FECDD3; border-radius: 22px; padding: 16px 20px; box-shadow: 0 4px 12px rgba(254, 205, 211, 0.4); min-height: 145px;">
+            <p style="font-size: 14px; color: #BE123C; margin: 0; font-weight: 800; letter-spacing: 0.5px;">🚨 CRITICAL BUGS</p>
+            <h2 style="margin: 8px 0; color: #E11D48; font-size: 2.1rem; font-weight: 900;">🔥 {total_critical}</h2>
+            <p style="font-size: 13px; color: #475569; margin: 0; font-weight: 600;">Fatal & Blocker Defects</p>
+        </div>
+        """, unsafe_allow_html=True)
 
     with m3:
-        with m3:
-            with st.container(border=True):
-                st.caption("✅ SOLVED CRITICAL")
-                st.markdown(f"<h3 style='margin:0; color:#4ade80;'>🛡️ {total_critical}</h3>", unsafe_allow_html=True)
-                st.caption(f"Resolved of {total_critical} Critical")
+        st.markdown(f"""
+        <div style="background-color: #F0FDF4; border: 6px solid #BBF7D0; border-radius: 22px; padding: 16px 20px; box-shadow: 0 4px 12px rgba(187, 247, 208, 0.4); min-height: 145px;">
+            <p style="font-size: 14px; color: #15803D; margin: 0; font-weight: 800; letter-spacing: 0.5px;">🧠 KNOWLEDGE BASE SIZE</p>
+            <h2 style="margin: 8px 0; color: #16A34A; font-size: 2.1rem; font-weight: 900;">📚 {total_kb_size}</h2>
+            <p style="font-size: 13px; color: #475569; margin: 0; font-weight: 600;">Base Indexed Bug Records</p>
+        </div>
+        """, unsafe_allow_html=True)
 
     with m4:
-        with st.container(border=True):
-            st.caption("🏆 TOP CONTRIBUTOR")
-            st.markdown(f"<h3 style='margin:0; color:#fbbf24; font-size:1.2rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;'>👨‍💻 {top_dev_name}</h3>", unsafe_allow_html=True)
-            st.caption(f"{top_dev_count} Submissions logged")
+        st.markdown(f"""
+        <div style="background-color: #FEFCE8; border: 6px solid #FEF08A; border-radius: 22px; padding: 16px 20px; box-shadow: 0 4px 12px rgba(254, 240, 138, 0.4); min-height: 145px;">
+            <p style="font-size: 14px; color: #A16207; margin: 0; font-weight: 800; letter-spacing: 0.5px;">🏆 TOP CONTRIBUTOR</p>
+            <h2 style="margin: 8px 0; color: #CA8A04; font-size: 1.55rem; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">👨‍💻 {top_dev_name}</h2>
+            <p style="font-size: 13px; color: #475569; margin: 0; font-weight: 600;">{top_dev_count} Submissions logged</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # # Metric Ribbon
+    # m1, m2, m3, m4 = st.columns(4)
+
+    # with m1:
+    #     with st.container(border=True):
+    #         st.markdown('<p style="font-size: 15px; color: #091540; margin: 0; font-weight: 700;"> 📁 TOTAL SUBMITTED </p>', unsafe_allow_html=True)
+    #         st.markdown(f"<h3 style='margin: 8px 0; color:#38bdf8;'>🐞 {total_bugs}</h3>", unsafe_allow_html=True)
+    #         st.markdown('<p style="font-size: 14px; color: #091540; margin: 0; font-weight: 600;"> All Ingested Tickets </p>', unsafe_allow_html=True)
+
+    # with m2:
+    #     with st.container(border=True):
+    #         st.markdown('<p style="font-size: 15px; color: #091540; margin: 0; font-weight: 700;"> 🚨 CRITICAL BUGS </p>', unsafe_allow_html=True)
+    #         st.markdown(f"<h3 style='margin: 8px 0; color:#f87171;'>🔥 {total_critical}</h3>", unsafe_allow_html=True)
+    #         st.markdown('<p style="font-size: 14px; color: #091540; margin: 0; font-weight: 600;"> Fatal & Blocker Defects </p>', unsafe_allow_html=True)
+
+    # with m3:
+    #     with st.container(border=True):
+    #         st.markdown('<p style="font-size: 15px; color: #091540; margin: 0; font-weight: 700;"> 🧠 KNOWLEDGE BASE SIZE </p>', unsafe_allow_html=True)
+    #         st.markdown(f"<h3 style='margin: 8px 0; color:#4ade80;'>📚 {total_kb_size}</h3>", unsafe_allow_html=True)
+    #         st.markdown('<p style="font-size: 14px; color: #091540; margin: 0; font-weight: 600;"> Base Indexed Bug Records </p>', unsafe_allow_html=True)
+
+    # with m4:
+    #     with st.container(border=True):
+    #         st.markdown('<p style="font-size: 15px; color: #091540; margin: 0; font-weight: 700;"> 🏆 TOP CONTRIBUTOR </p>', unsafe_allow_html=True)
+    #         st.markdown(f"<h3 style='margin: 8px 0; color:#fbbf24; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;'>👨‍💻 {top_dev_name}</h3>", unsafe_allow_html=True)
+    #         st.markdown(f'<p style="font-size: 14px; color: #091540; margin: 0; font-weight: 600;"> {top_dev_count} Submissions logged </p>', unsafe_allow_html=True)
 
     st.divider()
 
-    # ---------------------------------------------------------
-    # 3. Live Defect Ticket Table (bug_submissions.db)
-    # ---------------------------------------------------------
+    # =====================================================================
+    # 🔔 PENDING REVIEWS & MANUAL EMAIL TRIGGER (With Stack Trace)
+    # =====================================================================
+    pending_bugs = get_pending_review_bugs()
+
+    with st.container(border=True):
+        st.markdown(f"##### ⏳ Pending Verification Reviews ({len(pending_bugs)})")
+        st.caption("Tickets awaiting outcome confirmation. Click remind to send an email with the stack trace included.")
+
+        if pending_bugs:
+            for b_id, b_sev, b_comp, b_trace, b_time in pending_bugs[:5]: # Shows top 5 pending
+                p_col1, p_col2, p_col3, p_btn = st.columns([2, 2, 2, 1.5])
+                with p_col1:
+                    st.markdown(f"**🐞 `{b_id}`**")
+                with p_col2:
+                    st.write(f"**Component:** {b_comp or 'N/A'}")
+                with p_col3:
+                    st.write(f"**Date:** {b_time[:10] if b_time else 'N/A'}")
+                with p_btn:
+                    if st.button("📧 Remind", key=f"manual_remind_{b_id}", width="stretch"):
+                        recipient = get_ticket_recipient_email(b_id)
+                        if recipient:
+                            success = send_verification_email_api(recipient, b_id, stack_trace=b_trace or "")
+                            if success:
+                                st.success(f"Email sent to {recipient} with stack trace!")
+                        else:
+                            st.warning(f"No valid email found for {b_id}")
+        else:
+            st.success("🎉 All bug tickets have been verified!")
+
+    st.divider()
+
+    # Telemetry Feed Table
     with st.container(border=True):
         t_head, t_search = st.columns([2.6, 1.4])
         with t_head:
@@ -1170,7 +1627,6 @@ elif page == "🏠 Dashboard":
             db_search = st.text_input("Search Database", placeholder="Filter by ID, component, severity...", label_visibility="collapsed")
 
         if not submissions_df.empty:
-            # Display relevant columns
             cols_to_show = [c for c in ['bug_id', 'severity', 'priority', 'component', 'error_type', 'status', 'timestamp', 'recommended_fix'] if c in submissions_df.columns]
             table_df = submissions_df[cols_to_show].copy()
 
@@ -1178,7 +1634,7 @@ elif page == "🏠 Dashboard":
                 mask = table_df.astype(str).apply(lambda row: row.str.contains(db_search, case=False, na=False).any(), axis=1)
                 table_df = table_df[mask]
 
-            st.dataframe(table_df, use_container_width=True, height=450)
+            st.dataframe(table_df, width="stretch", height=450)
             st.caption(f"Displaying {len(table_df)} of {total_bugs} total records.")
         else:
             st.info("No bug records found in `bug_submissions.db`. Submit a bug to populate telemetry.")

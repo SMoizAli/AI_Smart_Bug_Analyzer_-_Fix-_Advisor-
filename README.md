@@ -7,7 +7,6 @@
 
 - An AI-powered system that takes bug reports, stack traces, or error logs and uses a multi-agent pipeline combined with a RAG knowledge base of historical  defects to triage, analyze, detect duplicates, and suggest fixes for software bugs  and grows its own knowledge base over time as recommendations are confirmed working.
 
-This is a solo InfosysSpringboard internship project, built entirely in Python by me.
 
 ---
 
