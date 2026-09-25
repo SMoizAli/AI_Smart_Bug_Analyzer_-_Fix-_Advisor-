@@ -219,12 +219,14 @@ st.markdown(
         background-color: #F8FAFC !important;
         font-size: 1.05rem !important;
     }
+    
+    /* Ensure global readability */
     p, span, label {
         color: #0F172A;
     }
     
     /* =========================================================
-       2. SIDEBAR NAVIGATION (Vibrant Unique Icon Ring Palettes)
+       2. SIDEBAR NAVIGATION (Universal Cross-Version Selectors)
        ========================================================= */
     [data-testid="stSidebar"] {
         background-color: #FFFFFF !important;
@@ -246,124 +248,193 @@ st.markdown(
         width: 100%;
     }
 
-    [data-testid="stSidebar"] div[role="radiogroup"] > label {
+    /* Target all radio option labels / wrappers */
+    [data-testid="stSidebar"] div[role="radiogroup"] label,
+    [data-testid="stSidebar"] div[role="radiogroup"] > div {
         width: 100% !important;
         min-height: 54px !important;
         border-radius: 20px !important;
-        font-weight: 800 !important;
-        font-size: 1.0rem !important;
+        display: flex !important;
+        align-items: center !important;
         padding: 4px 18px !important;
         transition: all 0.22s ease-in-out !important;
         box-shadow: 0 3px 8px rgba(0, 0, 0, 0.04) !important;
+        cursor: pointer !important;
     }
 
-    [data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-child {
+    /* Force text inside buttons to stay prominent */
+    [data-testid="stSidebar"] div[role="radiogroup"] label * {
+        font-weight: 800 !important;
+        font-size: 1.0rem !important;
+    }
+
+    /* Completely hide the radio dots (svg / circle / indicator div) */
+    [data-testid="stSidebar"] div[role="radiogroup"] input[type="radio"],
+    [data-testid="stSidebar"] div[role="radiogroup"] label > div:first-child:not(:only-child),
+    [data-testid="stSidebar"] div[role="radiogroup"] [data-testid="stRadioButton"] svg {
         display: none !important;
+        visibility: hidden !important;
+        width: 0 !important;
+        height: 0 !important;
     }
 
-    /* BUTTON 1: 🏠 Dashboard -> Pink */
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(1) {
+    /* -------------------------------------------------------------
+       BUTTON 1: 🏠 Dashboard -> Vibrant Pink (YouTube style)
+       ------------------------------------------------------------- */
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(1),
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(1) label {
         background-color: #FDF2F8 !important;
         border: 6px solid #FBCFE8 !important;
     }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(1):hover {
-        border-color: #F472B6 !important;
-        transform: translateY(-2px);
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(1) *,
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(1) label * {
+        color: #BE185D !important;
     }
+    /* Active State */
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(1):has(input:checked),
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(1) label:has(input:checked),
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(1)[data-checked="true"] {
         background: linear-gradient(135deg, #EC4899 0%, #DB2777 100%) !important;
         border: 6px solid #FBCFE8 !important;
         box-shadow: 0 6px 16px rgba(219, 39, 119, 0.35) !important;
     }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(1):has(input:checked) *,
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(1) label:has(input:checked) *,
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(1)[data-checked="true"] * {
+        color: #FFFFFF !important;
+    }
 
-    /* BUTTON 2: 1️⃣ Submit Bug -> Butter Gold */
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(2) {
+    /* -------------------------------------------------------------
+       BUTTON 2: 1️⃣ Submit Bug -> Butter Gold (Chrome style)
+       ------------------------------------------------------------- */
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(2),
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(2) label {
         background-color: #FEFCE8 !important;
         border: 6px solid #FEF08A !important;
     }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(2):hover {
-        border-color: #FACC15 !important;
-        transform: translateY(-2px);
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(2) *,
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(2) label * {
+        color: #A16207 !important;
     }
+    /* Active State */
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(2):has(input:checked),
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(2) label:has(input:checked),
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(2)[data-checked="true"] {
         background: linear-gradient(135deg, #EAB308 0%, #CA8A04 100%) !important;
         border: 6px solid #FEF08A !important;
         box-shadow: 0 6px 16px rgba(202, 138, 4, 0.35) !important;
     }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(2):has(input:checked) *,
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(2) label:has(input:checked) *,
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(2)[data-checked="true"] * {
+        color: #FFFFFF !important;
+    }
 
-    /* BUTTON 3: 2️⃣ Analytics Dashboard -> Azure Blue */
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(3) {
+    /* -------------------------------------------------------------
+       BUTTON 3: 2️⃣ Analytics Dashboard -> Azure Blue (Files style)
+       ------------------------------------------------------------- */
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(3),
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(3) label {
         background-color: #F0F9FF !important;
         border: 6px solid #BAE6FD !important;
     }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(3):hover {
-        border-color: #38BDF8 !important;
-        transform: translateY(-2px);
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(3) *,
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(3) label * {
+        color: #0369A1 !important;
     }
+    /* Active State */
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(3):has(input:checked),
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(3) label:has(input:checked),
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(3)[data-checked="true"] {
         background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%) !important;
         border: 6px solid #BAE6FD !important;
         box-shadow: 0 6px 16px rgba(2, 132, 199, 0.35) !important;
     }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(3):has(input:checked) *,
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(3) label:has(input:checked) *,
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(3)[data-checked="true"] * {
+        color: #FFFFFF !important;
+    }
 
-    /* BUTTON 4: 🧠 Knowledge Base -> Emerald Mint Green */
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(4) {
+    /* -------------------------------------------------------------
+       BUTTON 4: 🧠 Knowledge Base -> Emerald Mint (Photos style)
+       ------------------------------------------------------------- */
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(4),
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(4) label {
         background-color: #F0FDF4 !important;
         border: 6px solid #BBF7D0 !important;
     }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(4):hover {
-        border-color: #4ADE80 !important;
-        transform: translateY(-2px);
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(4) *,
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(4) label * {
+        color: #15803D !important;
     }
+    /* Active State */
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(4):has(input:checked),
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(4) label:has(input:checked),
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(4)[data-checked="true"] {
         background: linear-gradient(135deg, #16A34A 0%, #15803D 100%) !important;
         border: 6px solid #BBF7D0 !important;
         box-shadow: 0 6px 16px rgba(22, 163, 74, 0.35) !important;
     }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(4):has(input:checked) *,
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(4) label:has(input:checked) *,
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(4)[data-checked="true"] * {
+        color: #FFFFFF !important;
+    }
 
-    /* BUTTON 5: 3️⃣ About The App -> Peach / Coral */
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(5) {
+    /* -------------------------------------------------------------
+       BUTTON 5: 3️⃣ About The App -> Vibrant Sunset Coral / Peach
+       ------------------------------------------------------------- */
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(5),
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(5) label {
         background-color: #FFF7ED !important;
         border: 6px solid #FED7AA !important;
     }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(5):hover {
-        border-color: #FB923C !important;
-        transform: translateY(-2px);
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(5) *,
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(5) label * {
+        color: #C2410C !important;
     }
+    /* Active State */
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(5):has(input:checked),
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(5) label:has(input:checked),
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(5)[data-checked="true"] {
         background: linear-gradient(135deg, #EA580C 0%, #C2410C 100%) !important;
         border: 6px solid #FED7AA !important;
         box-shadow: 0 6px 16px rgba(234, 88, 12, 0.35) !important;
     }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(5):has(input:checked) *,
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(5) label:has(input:checked) *,
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(5)[data-checked="true"] * {
+        color: #FFFFFF !important;
+    }
 
-    /* BUTTON 6: 📚 User Guide -> Royal Purple */
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(6) {
+    /* -------------------------------------------------------------
+       BUTTON 6: 📚 User Guide -> Royal Electric Purple
+       ------------------------------------------------------------- */
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(6),
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(6) label {
         background-color: #FAF5FF !important;
         border: 6px solid #E9D5FF !important;
     }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(6):hover {
-        border-color: #C084FC !important;
-        transform: translateY(-2px);
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(6) *,
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(6) label * {
+        color: #7E22CE !important;
     }
+    /* Active State */
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(6):has(input:checked),
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(6) label:has(input:checked),
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(6)[data-checked="true"] {
         background: linear-gradient(135deg, #9333EA 0%, #7E22CE 100%) !important;
         border: 6px solid #E9D5FF !important;
         box-shadow: 0 6px 16px rgba(147, 51, 234, 0.35) !important;
     }
-
-    [data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p,
-    [data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] p {
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(6):has(input:checked) *,
+    [data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(6) label:has(input:checked) *,
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(6)[data-checked="true"] * {
         color: #FFFFFF !important;
-        font-weight: 900 !important;
     }
-    
-    /* Default cards */
+
+    /* Standard Card Container */
     [data-testid="stVerticalBlockBorderWrapper"] {
         background-color: #FFFFFF !important;
         border: 1px solid #CBD5E1 !important;
@@ -371,63 +442,7 @@ st.markdown(
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
     }
 
-    /* =========================================================
-       TELEMETRY METRIC CARDS (Custom Direct Selectors)
-       ========================================================= */
-    /* Target any container with the corresponding card class */
-    div:has(> .telemetry-card-1),
-    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-1) {
-        background-color: #F0F9FF !important;
-        border: 6px solid #BAE6FD !important;
-        border-radius: 24px !important;
-        box-shadow: 0 6px 16px rgba(186, 230, 253, 0.45) !important;
-        transition: transform 0.2s ease !important;
-    }
-    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-1):hover {
-        border-color: #38BDF8 !important;
-        transform: translateY(-2px);
-    }
-
-    div:has(> .telemetry-card-2),
-    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-2) {
-        background-color: #FFF1F2 !important;
-        border: 6px solid #FECDD3 !important;
-        border-radius: 24px !important;
-        box-shadow: 0 6px 16px rgba(254, 205, 211, 0.45) !important;
-        transition: transform 0.2s ease !important;
-    }
-    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-2):hover {
-        border-color: #FB7185 !important;
-        transform: translateY(-2px);
-    }
-
-    div:has(> .telemetry-card-3),
-    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-3) {
-        background-color: #F0FDF4 !important;
-        border: 6px solid #BBF7D0 !important;
-        border-radius: 24px !important;
-        box-shadow: 0 6px 16px rgba(187, 247, 208, 0.45) !important;
-        transition: transform 0.2s ease !important;
-    }
-    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-3):hover {
-        border-color: #4ADE80 !important;
-        transform: translateY(-2px);
-    }
-
-    div:has(> .telemetry-card-4),
-    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-4) {
-        background-color: #FEFCE8 !important;
-        border: 6px solid #FEF08A !important;
-        border-radius: 24px !important;
-        box-shadow: 0 6px 16px rgba(254, 240, 138, 0.45) !important;
-        transition: transform 0.2s ease !important;
-    }
-    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-4):hover {
-        border-color: #FACC15 !important;
-        transform: translateY(-2px);
-    }
-
-    /* Buttons & standard form controls */
+    /* Inputs, Buttons, & Alert Boxes */
     div.stButton > button {
         background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%) !important;
         color: #FFFFFF !important;
@@ -447,99 +462,16 @@ st.markdown(
         color: #FFFFFF !important;
         font-weight: 700 !important;
     }
-    .stTextArea textarea {
+    .stTextArea textarea, .stTextInput input {
         background-color: #FFFFFF !important;
         border: 2px solid #CBD5E1 !important;
         color: #0F172A !important;
         border-radius: 8px !important;
-        font-family: 'Consolas', 'Courier New', monospace !important;
-        font-size: 1.0rem !important;
-        font-weight: 500 !important;
-    }
-    .stTextInput input {
-        background-color: #FFFFFF !important;
-        border: 2px solid #CBD5E1 !important;
-        color: #0F172A !important;
-        border-radius: 8px !important;
-        font-size: 1.0rem !important;
-        font-weight: 600 !important;
-    }
-    div[data-baseweb="select"] {
-        background-color: #FFFFFF !important;
-        border: 2px solid #CBD5E1 !important;
-        border-radius: 8px !important;
-    }
-    div[data-baseweb="select"] * {
-        background-color: transparent !important;
-        color: #0F172A !important;
-        font-weight: 600 !important;
     }
     [data-testid="stFileUploader"] section {
         background-color: #F8FAFC !important;
         border: 2px dashed #94A3B8 !important;
         border-radius: 8px !important;
-        color: #1E293B !important;
-    }
-    div[data-testid="stAlert"] {
-        background-color: #FFFFFF !important;
-        border: 2px solid #0284C7 !important;
-        border-radius: 10px !important;
-        padding: 16px 20px !important;
-        box-shadow: 0 2px 6px rgba(2, 132, 199, 0.1) !important;
-    }
-    .badge-bug-id {
-        background-color: #FFFFFF !important;
-        color: #0284C7 !important;
-        border: 2px solid #0284C7 !important;
-        padding: 6px 14px !important;
-        border-radius: 8px !important;
-        font-family: 'Consolas', 'Courier New', monospace !important;
-        font-size: 1.05rem !important;
-        font-weight: 800 !important;
-        display: inline-block !important;
-    }
-    .badge-filter-box {
-        background: #E0F2FE !important;
-        color: #0369A1 !important;
-        border: 1px solid #BAE6FD !important;
-        padding: 6px 12px !important;
-        border-radius: 6px !important;
-        font-weight: 700 !important;
-        font-size: 0.95rem !important;
-        display: inline-block;
-        margin-bottom: 6px;
-    }
-    .badge-verified-kb {
-        background: #DCFCE7 !important;
-        color: #15803D !important;
-        border: 1px solid #86EFAC !important;
-        padding: 6px 14px !important;
-        border-radius: 20px !important;
-        font-weight: 700 !important;
-        font-size: 0.9rem !important;
-    }
-    .badge-unresolved {
-        background: #FEE2E2 !important;
-        color: #B91C1C !important;
-        border: 1px solid #FCA5A5 !important;
-        padding: 6px 14px !important;
-        border-radius: 20px !important;
-        font-weight: 700 !important;
-        font-size: 0.9rem !important;
-    }
-    .badge-pending {
-        background: #FEF3C7 !important;
-        color: #B45309 !important;
-        border: 1px solid #FDE68A !important;
-        padding: 6px 14px !important;
-        border-radius: 20px !important;
-        font-weight: 700 !important;
-        font-size: 0.9rem !important;
-    }
-    [data-testid="stSidebarUserContent"] {
-        display: flex;
-        flex-direction: column;
-        height: 100%;
     }
     .sidebar-bottom-anchor {
         margin-top: auto !important;
@@ -553,16 +485,11 @@ st.markdown(
         font-weight: 700 !important;
         width: 100% !important;
         border-radius: 8px !important;
-        box-shadow: 0 2px 4px rgba(239, 68, 68, 0.25) !important;
-    }
-    .logout-btn-wrapper button:hover {
-        background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important;
     }
     </style>
     """,
     unsafe_allow_html=True
 )
-
 # =====================================================================
 # 🔐 AUTHENTICATION GATEWAY
 # =====================================================================
