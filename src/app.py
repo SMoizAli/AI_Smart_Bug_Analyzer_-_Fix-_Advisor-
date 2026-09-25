@@ -1512,37 +1512,37 @@ elif page == "🏠 Dashboard":
 
     st.divider()
 
-    # =====================================================================
-    # 🔔 PENDING REVIEWS & MANUAL EMAIL TRIGGER (With Stack Trace)
-    # =====================================================================
-    pending_bugs = get_pending_review_bugs()
+    # # =====================================================================
+    # # 🔔 PENDING REVIEWS & MANUAL EMAIL TRIGGER (With Stack Trace)
+    # # =====================================================================
+    # pending_bugs = get_pending_review_bugs()
 
-    with st.container(border=True):
-        st.markdown(f"##### ⏳ Pending Verification Reviews ({len(pending_bugs)})")
-        st.caption("Tickets awaiting outcome confirmation. Click remind to send an email with the stack trace included.")
+    # with st.container(border=True):
+    #     st.markdown(f"##### ⏳ Pending Verification Reviews ({len(pending_bugs)})")
+    #     st.caption("Tickets awaiting outcome confirmation. Click remind to send an email with the stack trace included.")
 
-        if pending_bugs:
-            for b_id, b_sev, b_comp, b_trace, b_time in pending_bugs[:5]: # Shows top 5 pending
-                p_col1, p_col2, p_col3, p_btn = st.columns([2, 2, 2, 1.5])
-                with p_col1:
-                    st.markdown(f"**🐞 `{b_id}`**")
-                with p_col2:
-                    st.write(f"**Component:** {b_comp or 'N/A'}")
-                with p_col3:
-                    st.write(f"**Date:** {b_time[:10] if b_time else 'N/A'}")
-                with p_btn:
-                    if st.button("📧 Remind", key=f"manual_remind_{b_id}", width="stretch"):
-                        recipient = get_ticket_recipient_email(b_id)
-                        if recipient:
-                            success = send_verification_email_api(recipient, b_id, stack_trace=b_trace or "")
-                            if success:
-                                st.success(f"Email sent to {recipient} with stack trace!")
-                        else:
-                            st.warning(f"No valid email found for {b_id}")
-        else:
-            st.success("🎉 All bug tickets have been verified!")
+    #     if pending_bugs:
+    #         for b_id, b_sev, b_comp, b_trace, b_time in pending_bugs[:5]: # Shows top 5 pending
+    #             p_col1, p_col2, p_col3, p_btn = st.columns([2, 2, 2, 1.5])
+    #             with p_col1:
+    #                 st.markdown(f"**🐞 `{b_id}`**")
+    #             with p_col2:
+    #                 st.write(f"**Component:** {b_comp or 'N/A'}")
+    #             with p_col3:
+    #                 st.write(f"**Date:** {b_time[:10] if b_time else 'N/A'}")
+    #             with p_btn:
+    #                 if st.button("📧 Remind", key=f"manual_remind_{b_id}", width="stretch"):
+    #                     recipient = get_ticket_recipient_email(b_id)
+    #                     if recipient:
+    #                         success = send_verification_email_api(recipient, b_id, stack_trace=b_trace or "")
+    #                         if success:
+    #                             st.success(f"Email sent to {recipient} with stack trace!")
+    #                     else:
+    #                         st.warning(f"No valid email found for {b_id}")
+    #     else:
+    #         st.success("🎉 All bug tickets have been verified!")
 
-    st.divider()
+    # st.divider()
 
     # Telemetry Feed Table
     with st.container(border=True):
