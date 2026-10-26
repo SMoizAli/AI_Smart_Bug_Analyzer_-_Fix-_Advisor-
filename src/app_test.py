@@ -52,6 +52,7 @@ BUG_DB_PATH = DATA_DIR / "bug_submissions.db"
 def init_auth_db():
     conn = sqlite3.connect(AUTH_DB_PATH)
     cursor = conn.cursor()
+    # Users table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,8 +62,30 @@ def init_auth_db():
             last_login TEXT
         )
     """)
+    # Blocked users table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS blocked_users (
+            email TEXT PRIMARY KEY,
+            blocked_at TEXT NOT NULL
+        )
+    """)
+    # Dynamic Admins table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS admins (
+            email TEXT PRIMARY KEY,
+            added_at TEXT NOT NULL
+        )
+    """)
+    
+    # Pre-seed root admins if not present
+    default_admins = ["smoiz38021@gmail.com", "admin@infosys.com"]
+    for adm in default_admins:
+        cursor.execute("INSERT OR IGNORE INTO admins (email, added_at) VALUES (?, ?)", (adm, datetime.now().isoformat()))
+
     conn.commit()
     conn.close()
+
+init_auth_db()
 
 init_auth_db()
 
@@ -108,19 +131,45 @@ def init_dev_db():
 
 init_dev_db()
 
-def verify_user(email: str, password: str) -> bool:
+def verify_user(email: str, password: str) -> tuple[bool, str]:
+    clean_email = email.strip().lower()
     conn = sqlite3.connect(AUTH_DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT password_hash FROM users WHERE email = ?", (email.strip().lower(),))
+    
+    # 1. Check if user is blocked
+    cursor.execute("SELECT email FROM blocked_users WHERE email = ?", (clean_email,))
+    if cursor.fetchone():
+        conn.close()
+        return False, "Access Denied: This account has been blocked by the administrator."
+
+    # 2. Verify credentials
+    cursor.execute("SELECT password_hash FROM users WHERE email = ?", (clean_email,))
     row = cursor.fetchone()
     if row and row[0] == hash_password(password):
-        cursor.execute("UPDATE users SET last_login = ? WHERE email = ?", (datetime.now().isoformat(), email.strip().lower()))
+        cursor.execute("UPDATE users SET last_login = ? WHERE email = ?", (datetime.now().isoformat(), clean_email))
         conn.commit()
         conn.close()
-        return True
+        return True, "Login successful"
+        
     conn.close()
-    return False
+    return False, "Invalid email or password."
 
+
+def is_admin_user(email: str) -> bool:
+    if not email:
+        return False
+    clean_email = email.strip().lower()
+    if not AUTH_DB_PATH.exists():
+        return clean_email in ["smoiz38021@gmail.com", "admin@infosys.com"]
+    try:
+        conn = sqlite3.connect(AUTH_DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT email FROM admins WHERE email = ?", (clean_email,))
+        row = cursor.fetchone()
+        conn.close()
+        return row is not None
+    except Exception:
+        return clean_email in ["smoiz38021@gmail.com", "admin@infosys.com"]
 # =====================================================================
 # 📧 RESEND MANUAL DISPATCHER (With Stack Trace Included)
 # =====================================================================
@@ -222,9 +271,7 @@ def get_ticket_recipient_email(bug_id: str):
 
     return target_email or st.session_state.get("user_email")
 
-# =====================================================================
-# 🎨 CUSTOM CSS
-# =====================================================================
+
 # =====================================================================
 # 🎨 CUSTOM CSS
 # =====================================================================
@@ -593,16 +640,27 @@ importlib.reload(auth_ui)
 auth_ui.render_infosys_auth_gateway(verify_user, register_user)
 
 # =====================================================================
-# 🧭 SIDEBAR NAVIGATION
+# 🧭 DYNAMIC ROLE-BASED SIDEBAR NAVIGATION
 # =====================================================================
-page = st.sidebar.radio(
-    "Creation of Intelligent 🐞 Diagnosis Platform with Fix Recommendation Assistance",
-    ["🏠 Dashboard", "1️⃣Submit Bug", "2️⃣Analytics Dashboard", "🧠Knowledge Base", "3️⃣About The App", "📚User Guide"]
-)
+user_email_current = st.session_state.get("user_email", "")
+is_admin = is_admin_user(user_email_current)
+
+if is_admin:
+    page = st.sidebar.radio(
+        "Navigation (Admin Mode)",
+        ["🏠 Dashboard", "1️⃣ Submit Bug", "2️⃣ Analytics Dashboard", "🧠 Knowledge Base", "3️⃣ About The App", "📚 User Guide", "🛡️ Admin Panel"]
+    )
+else:
+    page = st.sidebar.radio(
+        "Navigation (User Mode)",
+        ["🏠 Dashboard", "1️⃣ Submit Bug", "2️⃣ Analytics Dashboard", "3️⃣ About The App", "📚 User Guide"]
+    )
 
 st.sidebar.markdown('<div class="sidebar-bottom-anchor"></div>', unsafe_allow_html=True)
 with st.sidebar.container():
-    st.markdown(f"**👤 User:** `{st.session_state.user_email}`")
+    role_badge = "👑 Admin" if is_admin else "👤 User"
+    st.markdown(f"**Role:** {role_badge}")
+    st.markdown(f"**User:** `{user_email_current}`")
     st.markdown('<div class="logout-btn-wrapper">', unsafe_allow_html=True)
     if st.button("🚪 Log Out", key="sidebar_bottom_logout_btn", width="stretch"):
         st.session_state.authenticated = False
@@ -1449,7 +1507,7 @@ elif page == "🧠Knowledge Base":
         st.error(f"❌ File not found at: `{KB_CSV_PATH}`. Please check the path.")
 
 # =====================================================================
-# 🏠 PAGE 6: TELEMETRY DASHBOARD
+# 🏠 PAGE 6: TELEMETRY DASHBOARD (Admin & User view)
 # =====================================================================
 elif page == "🏠 Dashboard":
     st.title("📊 Telemetry Dashboard")
@@ -1503,9 +1561,7 @@ elif page == "🏠 Dashboard":
         top_dev_name = st.session_state.get("user_email", "Developer").split("@")[0]
         top_dev_count = total_bugs
 
-    
-    
-    # Metric Ribbon (Direct Squircle HTML Cards with 6px Thick Borders)
+    # Metric Ribbon
     m1, m2, m3, m4 = st.columns(4)
 
     with m1:
@@ -1544,66 +1600,40 @@ elif page == "🏠 Dashboard":
         </div>
         """, unsafe_allow_html=True)
 
-    # # Metric Ribbon
-    # m1, m2, m3, m4 = st.columns(4)
-
-    # with m1:
-    #     with st.container(border=True):
-    #         st.markdown('<p style="font-size: 15px; color: #091540; margin: 0; font-weight: 700;"> 📁 TOTAL SUBMITTED </p>', unsafe_allow_html=True)
-    #         st.markdown(f"<h3 style='margin: 8px 0; color:#38bdf8;'>🐞 {total_bugs}</h3>", unsafe_allow_html=True)
-    #         st.markdown('<p style="font-size: 14px; color: #091540; margin: 0; font-weight: 600;"> All Ingested Tickets </p>', unsafe_allow_html=True)
-
-    # with m2:
-    #     with st.container(border=True):
-    #         st.markdown('<p style="font-size: 15px; color: #091540; margin: 0; font-weight: 700;"> 🚨 CRITICAL BUGS </p>', unsafe_allow_html=True)
-    #         st.markdown(f"<h3 style='margin: 8px 0; color:#f87171;'>🔥 {total_critical}</h3>", unsafe_allow_html=True)
-    #         st.markdown('<p style="font-size: 14px; color: #091540; margin: 0; font-weight: 600;"> Fatal & Blocker Defects </p>', unsafe_allow_html=True)
-
-    # with m3:
-    #     with st.container(border=True):
-    #         st.markdown('<p style="font-size: 15px; color: #091540; margin: 0; font-weight: 700;"> 🧠 KNOWLEDGE BASE SIZE </p>', unsafe_allow_html=True)
-    #         st.markdown(f"<h3 style='margin: 8px 0; color:#4ade80;'>📚 {total_kb_size}</h3>", unsafe_allow_html=True)
-    #         st.markdown('<p style="font-size: 14px; color: #091540; margin: 0; font-weight: 600;"> Base Indexed Bug Records </p>', unsafe_allow_html=True)
-
-    # with m4:
-    #     with st.container(border=True):
-    #         st.markdown('<p style="font-size: 15px; color: #091540; margin: 0; font-weight: 700;"> 🏆 TOP CONTRIBUTOR </p>', unsafe_allow_html=True)
-    #         st.markdown(f"<h3 style='margin: 8px 0; color:#fbbf24; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;'>👨‍💻 {top_dev_name}</h3>", unsafe_allow_html=True)
-    #         st.markdown(f'<p style="font-size: 14px; color: #091540; margin: 0; font-weight: 600;"> {top_dev_count} Submissions logged </p>', unsafe_allow_html=True)
-
     st.divider()
 
     # =====================================================================
-    # 🔔 PENDING REVIEWS & MANUAL EMAIL TRIGGER (With Stack Trace)
+    # 🔔 PENDING REVIEWS & MANUAL EMAIL TRIGGER (Admin Only Feature)
     # =====================================================================
-    pending_bugs = get_pending_review_bugs()
+    if is_admin:
+        pending_bugs = get_pending_review_bugs()
 
-    with st.container(border=True):
-        st.markdown(f"##### ⏳ Pending Verification Reviews ({len(pending_bugs)})")
-        st.caption("Tickets awaiting outcome confirmation. Click remind to send an email with the stack trace included.")
+        with st.container(border=True):
+            st.markdown(f"##### ⏳ Pending Verification Reviews ({len(pending_bugs)})")
+            st.caption("Tickets awaiting outcome confirmation. Click remind to send an email with the stack trace included.")
 
-        if pending_bugs:
-            for b_id, b_sev, b_comp, b_trace, b_time in pending_bugs[:5]: # Shows top 5 pending
-                p_col1, p_col2, p_col3, p_btn = st.columns([2, 2, 2, 1.5])
-                with p_col1:
-                    st.markdown(f"**🐞 `{b_id}`**")
-                with p_col2:
-                    st.write(f"**Component:** {b_comp or 'N/A'}")
-                with p_col3:
-                    st.write(f"**Date:** {b_time[:10] if b_time else 'N/A'}")
-                with p_btn:
-                    if st.button("📧 Remind", key=f"manual_remind_{b_id}", width="stretch"):
-                        recipient = get_ticket_recipient_email(b_id)
-                        if recipient:
-                            success = send_verification_email_api(recipient, b_id, stack_trace=b_trace or "")
-                            if success:
-                                st.success(f"Email sent to {recipient} with stack trace!")
-                        else:
-                            st.warning(f"No valid email found for {b_id}")
-        else:
-            st.success("🎉 All bug tickets have been verified!")
+            if pending_bugs:
+                for b_id, b_sev, b_comp, b_trace, b_time in pending_bugs[:5]:
+                    p_col1, p_col2, p_col3, p_btn = st.columns([2, 2, 2, 1.5])
+                    with p_col1:
+                        st.markdown(f"**🐞 `{b_id}`**")
+                    with p_col2:
+                        st.write(f"**Component:** {b_comp or 'N/A'}")
+                    with p_col3:
+                        st.write(f"**Date:** {b_time[:10] if b_time else 'N/A'}")
+                    with p_btn:
+                        if st.button("📧 Remind", key=f"manual_remind_{b_id}", width="stretch"):
+                            recipient = get_ticket_recipient_email(b_id)
+                            if recipient:
+                                success = send_verification_email_api(recipient, b_id, stack_trace=b_trace or "")
+                                if success:
+                                    st.success(f"Email sent to {recipient} with stack trace!")
+                            else:
+                                st.warning(f"No valid email found for {b_id}")
+            else:
+                st.success("🎉 All bug tickets have been verified!")
 
-    st.divider()
+        st.divider()
 
     # Telemetry Feed Table
     with st.container(border=True):
@@ -1626,3 +1656,142 @@ elif page == "🏠 Dashboard":
             st.caption(f"Displaying {len(table_df)} of {total_bugs} total records.")
         else:
             st.info("No bug records found in `bug_submissions.db`. Submit a bug to populate telemetry.")
+
+
+# =====================================================================
+# 🛡️ PAGE: ADMIN PANEL (Admin Only Route)
+# =====================================================================
+elif page == "🛡️ Admin Panel" and is_admin:
+    st.title("🛡️ Administrator Control Panel")
+    st.caption("Manage registered user accounts, system blocks, security permissions, and administrative roles.")
+
+    is_super_root = (st.session_state.get("user_email", "").strip().lower() == "smoiz38021@gmail.com")
+
+    col_block, col_admin_mgmt = st.columns([1, 1])
+
+    with col_block:
+        with st.container(border=True):
+            st.markdown("##### 🚫 Block User Access")
+            st.write("Enter a registered user email address to revoke platform access immediately.")
+            
+            block_email_input = st.text_input("User Email to Block", placeholder="user@company.com", key="block_input_field")
+            if st.button("🚫 Block User", type="primary", key="block_btn_action"):
+                if block_email_input.strip():
+                    target = block_email_input.strip().lower()
+                    if is_admin_user(target):
+                        st.error("Cannot block an administrator account.")
+                    else:
+                        try:
+                            conn = sqlite3.connect(AUTH_DB_PATH)
+                            cursor = conn.cursor()
+                            cursor.execute("INSERT OR REPLACE INTO blocked_users (email, blocked_at) VALUES (?, ?)", (target, datetime.now().isoformat()))
+                            conn.commit()
+                            conn.close()
+                            st.success(f"Successfully blocked access for: {target}")
+                        except Exception as e:
+                            st.error(f"Error blocking user: {e}")
+                else:
+                    st.warning("Please enter a valid email address.")
+
+    with col_admin_mgmt:
+        with st.container(border=True):
+            st.markdown("##### 👑 Manage Administrators")
+            if is_super_root:
+                st.write("Promote registered users to Admin or revoke admin privileges.")
+                new_admin_input = st.text_input("User Email to Make Admin", placeholder="colleague@company.com", key="new_admin_input_field")
+                if st.button("➕ Promote to Admin", type="primary", key="promote_btn_action"):
+                    if new_admin_input.strip():
+                        target_adm = new_admin_input.strip().lower()
+                        try:
+                            conn = sqlite3.connect(AUTH_DB_PATH)
+                            cursor = conn.cursor()
+                            # Check if user exists in users table
+                            cursor.execute("SELECT email FROM users WHERE email = ?", (target_adm,))
+                            if cursor.fetchone() or target_adm == "admin@infosys.com":
+                                cursor.execute("INSERT OR IGNORE INTO admins (email, added_at) VALUES (?, ?)", (target_adm, datetime.now().isoformat()))
+                                conn.commit()
+                                conn.close()
+                                st.success(f"Successfully promoted {target_adm} to Administrator!")
+                                st.rerun()
+                            else:
+                                conn.close()
+                                st.warning("This email is not registered as a user yet.")
+                        except Exception as e:
+                            st.error(f"Error promoting user: {e}")
+                    else:
+                        st.warning("Please enter a valid email.")
+            else:
+                st.info("🔒 Only the Root Admin (`smoiz38021@gmail.com`) can promote or remove other administrators.")
+
+    st.divider()
+
+    # Lists for Blocked Accounts & Current Admins
+    col_list_blocked, col_list_admins = st.columns([1, 1])
+
+    with col_list_blocked:
+        with st.container(border=True):
+            st.markdown("##### 📋 Currently Blocked Accounts")
+            try:
+                conn = sqlite3.connect(AUTH_DB_PATH)
+                blocked_df = pd.read_sql("SELECT email, blocked_at FROM blocked_users", conn)
+                conn.close()
+
+                if not blocked_df.empty:
+                    for _, row in blocked_df.iterrows():
+                        b_email = row['email']
+                        b_time = row['blocked_at'][:10]
+                        b_col1, b_col2 = st.columns([2, 1])
+                        with b_col1:
+                            st.write(f"🔴 `{b_email}`")
+                            st.caption(f"Blocked on: {b_time}")
+                        with b_col2:
+                            if st.button("✅ Unblock", key=f"unblock_{b_email}"):
+                                conn = sqlite3.connect(AUTH_DB_PATH)
+                                cursor = conn.cursor()
+                                cursor.execute("DELETE FROM blocked_users WHERE email = ?", (b_email,))
+                                conn.commit()
+                                conn.close()
+                                st.success(f"Unblocked {b_email}")
+                                st.rerun()
+                else:
+                    st.info("No users are currently blocked.")
+            except Exception as e:
+                st.info("No blocked users database found yet.")
+
+    with col_list_admins:
+        with st.container(border=True):
+            st.markdown("##### 🛡️ Current System Administrators")
+            try:
+                conn = sqlite3.connect(AUTH_DB_PATH)
+                admins_df = pd.read_sql("SELECT email, added_at FROM admins", conn)
+                conn.close()
+
+                for _, row in admins_df.iterrows():
+                    a_email = row['email']
+                    a_time = row['added_at'][:10] if row['added_at'] else 'N/A'
+                    a_col1, a_col2 = st.columns([2, 1])
+                    with a_col1:
+                        st.write(f"👑 `{a_email}`")
+                        st.caption(f"Admin since: {a_time}")
+                    with a_col2:
+                        if is_super_root and a_email != "smoiz38021@gmail.com":
+                            if st.button("❌ Revoke", key=f"revoke_{a_email}"):
+                                conn = sqlite3.connect(AUTH_DB_PATH)
+                                cursor = conn.cursor()
+                                cursor.execute("DELETE FROM admins WHERE email = ?", (a_email,))
+                                conn.commit()
+                                conn.close()
+                                st.success(f"Revoked admin rights for {a_email}")
+                                st.rerun()
+            except Exception as e:
+                st.info("Error loading admins list.")
+
+    st.divider()
+    st.markdown("##### 👥 All Registered System Users")
+    try:
+        conn = sqlite3.connect(AUTH_DB_PATH)
+        users_df = pd.read_sql("SELECT user_id, email, created_at, last_login FROM users", conn)
+        conn.close()
+        st.dataframe(users_df, width="stretch")
+    except Exception:
+        st.info("No registered users found.")
