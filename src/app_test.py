@@ -304,11 +304,23 @@ st.markdown(
 
 /* shared pill shape (works whether label is a direct child or wrapped) */
 [data-testid="stSidebar"] div[role="radiogroup"] {
-    display: flex; flex-direction: column; gap: 12px; width: 100%;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;   /* makes every child the same width */
+    gap: 12px !important;
+    width: 100% !important;
+}
+[data-testid="stSidebar"] div[role="radiogroup"] > label,
+[data-testid="stSidebar"] div[role="radiogroup"] > div {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
 }
 [data-testid="stSidebar"] div[role="radiogroup"] label {
     width: 100% !important;
-    min-height: 50px !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;   /* keeps the 4px border inside the width */
+    min-height: 54px !important;         /* same height for all */
     border-radius: 16px !important;
     padding: 8px 16px !important;
     display: flex !important;
