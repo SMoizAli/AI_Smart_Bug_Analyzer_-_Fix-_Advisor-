@@ -290,117 +290,78 @@ st.markdown(
         color: #0F172A;
     }
     
-    /* =========================================================
-       2. SIDEBAR NAVIGATION (Reliable Cross-Version Styling)
-       ========================================================= */
     [data-testid="stSidebar"] {
-        background-color: #FFFFFF !important;
-        border-right: 2px solid #E2E8F0 !important;
-    }
+    background-color: #FFFFFF !important;
+    border-right: 2px solid #E2E8F0 !important;
+}
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p,
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"] span {
+    color: #0F172A !important;
+    font-weight: 900 !important;
+    font-size: 1.15rem !important;
+    margin-bottom: 12px;
+}
 
-    [data-testid="stSidebar"] [data-testid="stWidgetLabel"] p,
-    [data-testid="stSidebar"] [data-testid="stWidgetLabel"] span {
-        color: #0F172A !important;
-        font-weight: 900 !important;
-        font-size: 1.15rem !important;
-        margin-bottom: 12px;
-    }
+/* shared pill shape (works whether label is a direct child or wrapped) */
+[data-testid="stSidebar"] div[role="radiogroup"] {
+    display: flex; flex-direction: column; gap: 12px; width: 100%;
+}
+[data-testid="stSidebar"] div[role="radiogroup"] label {
+    width: 100% !important;
+    min-height: 50px !important;
+    border-radius: 16px !important;
+    padding: 8px 16px !important;
+    display: flex !important;
+    align-items: center !important;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.04) !important;
+    transition: all 0.22s ease-in-out !important;
+    cursor: pointer !important;
+}
+[data-testid="stSidebar"] div[role="radiogroup"] label p,
+[data-testid="stSidebar"] div[role="radiogroup"] label span {
+    color: #0F172A !important; font-weight: 800 !important;
+}
 
-    /* Target radio options safely */
-    [data-testid="stSidebar"] div[role="radiogroup"] {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        width: 100%;
-    }
+/* colors: BOTH layouts for each item */
+[data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(1),
+[data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(1) label {
+    background-color:#FDF2F8 !important; border:4px solid #FBCFE8 !important;
+}
+[data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(2),
+[data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(2) label {
+    background-color:#FEFCE8 !important; border:4px solid #FEF08A !important;
+}
+[data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(3),
+[data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(3) label {
+    background-color:#F0F9FF !important; border:4px solid #BAE6FD !important;
+}
+[data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(4),
+[data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(4) label {
+    background-color:#F0FDF4 !important; border:4px solid #BBF7D0 !important;
+}
+[data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(5),
+[data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(5) label {
+    background-color:#FFF7ED !important; border:4px solid #FED7AA !important;
+}
+[data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(6),
+[data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(6) label {
+    background-color:#FAF5FF !important; border:4px solid #E9D5FF !important;
+}
+[data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(7),
+[data-testid="stSidebar"] div[role="radiogroup"] > div:nth-child(7) label {
+    background-color:#F1F5F9 !important; border:4px solid #CBD5E1 !important;
+}
 
-    [data-testid="stSidebar"] div[role="radiogroup"] > label {
-        width: 100% !important;
-        min-height: 50px !important;
-        border-radius: 16px !important;
-        font-weight: 800 !important;
-        font-size: 1.0rem !important;
-        padding: 8px 16px !important;
-        transition: all 0.22s ease-in-out !important;
-        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.04) !important;
-        display: flex !important;
-        align-items: center !important;
-    }
-
-    /* Hide native radio circle cleanly without hiding text */
-    [data-testid="stSidebar"] div[role="radiogroup"] input[type="radio"] {
-        display: none !important;
-    }
-
-    /* Ensure text labels inside radio options stay fully visible and high-contrast */
-    [data-testid="stSidebar"] div[role="radiogroup"] label p,
-    [data-testid="stSidebar"] div[role="radiogroup"] label span {
-        color: #0F172A !important;
-        font-weight: 800 !important;
-    }
-
-    /* BUTTON 1: 🏠 Dashboard -> Pink */
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(1) {
-        background-color: #FDF2F8 !important;
-        border: 4px solid #FBCFE8 !important;
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(1):hover {
-        border-color: #F472B6 !important;
-    }
-
-    /* BUTTON 2: 1️⃣ Submit Bug -> Butter Gold */
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(2) {
-        background-color: #FEFCE8 !important;
-        border: 4px solid #FEF08A !important;
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(2):hover {
-        border-color: #FACC15 !important;
-    }
-
-    /* BUTTON 3: 2️⃣ Analytics Dashboard -> Azure Blue */
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(3) {
-        background-color: #F0F9FF !important;
-        border: 4px solid #BAE6FD !important;
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(3):hover {
-        border-color: #38BDF8 !important;
-    }
-
-    /* BUTTON 4: 🧠 Knowledge Base -> Emerald Mint Green */
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(4) {
-        background-color: #F0FDF4 !important;
-        border: 4px solid #BBF7D0 !important;
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(4):hover {
-        border-color: #4ADE80 !important;
-    }
-
-    /* BUTTON 5: 3️⃣ About The App -> Peach / Coral */
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(5) {
-        background-color: #FFF7ED !important;
-        border: 4px solid #FED7AA !important;
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(5):hover {
-        border-color: #FB923C !important;
-    }
-
-    /* BUTTON 6: 📚 User Guide -> Royal Purple */
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(6) {
-        background-color: #FAF5FF !important;
-        border: 4px solid #E9D5FF !important;
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(6):hover {
-        border-color: #C084FC !important;
-    }
-
-    /* BUTTON 7: 🛡️ Admin Panel (if visible) -> Slate / Dark */
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(7) {
-        background-color: #F1F5F9 !important;
-        border: 4px solid #CBD5E1 !important;
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(7):hover {
-        border-color: #64748B !important;
-    }
+/* selected item: one highlight for all (you lost this in app_test.py) */
+[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {
+    background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%) !important;
+    border-color: #BAE6FD !important;
+    box-shadow: 0 6px 16px rgba(2,132,199,0.35) !important;
+}
+[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p,
+[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) span {
+    color: #FFFFFF !important;
+}
 
     /* Default cards */
     [data-testid="stVerticalBlockBorderWrapper"] {
@@ -541,6 +502,7 @@ st.markdown(
     .logout-btn-wrapper button:hover {
         background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important;
     }
+    
     </style>
     """,
     unsafe_allow_html=True
@@ -562,12 +524,12 @@ is_admin = is_admin_user(user_email_current)
 
 if is_admin:
     page = st.sidebar.radio(
-        "Navigation (Admin Mode)",
+         "Creation of Intelligent 🐞 Diagnosis Platform with Fix Recommendation Assistance Navigation (Admin Mode)",
         ["🏠 Dashboard", "1️⃣ Submit Bug", "2️⃣ Analytics Dashboard", "🧠 Knowledge Base", "3️⃣ About The App", "📚 User Guide", "🛡️ Admin Panel"]
     )
 else:
     page = st.sidebar.radio(
-        "Navigation (User Mode)",
+        "Creation of Intelligent 🐞 Diagnosis Platform with Fix Recommendation Assistance Navigation (User Mode)",
         ["🏠 Dashboard", "1️⃣ Submit Bug", "2️⃣ Analytics Dashboard", "3️⃣ About The App", "📚 User Guide"]
     )
 
@@ -586,7 +548,7 @@ with st.sidebar.container():
 # =====================================================================
 # 📄 PAGE 1: SUBMIT BUG
 # =====================================================================
-if page == "1️⃣Submit Bug":
+if page == "1️⃣ Submit Bug":
     st.title(" Submit Defect logs")
     st.markdown('<span class="badge-filter-box">Paste your bug report or stack trace below - analysis runs automatically.</span>', unsafe_allow_html=True)
 
@@ -1041,7 +1003,7 @@ if page == "1️⃣Submit Bug":
 # =====================================================================
 # 📊 PAGE 2: ANALYTICS DASHBOARD
 # =====================================================================
-elif page == "2️⃣Analytics Dashboard":
+elif page == "2️⃣ Analytics Dashboard":
     st.subheader("Defect Pattern Analytics")
 
     if st.button("🔄 Refresh Analytics", key="refresh_analytics_btn"):
@@ -1313,7 +1275,7 @@ elif page == "2️⃣Analytics Dashboard":
 # =====================================================================
 # 📖 PAGE 3: ABOUT THE APP
 # =====================================================================
-elif page == "3️⃣About The App":
+elif page == "3️⃣ About The App":
     st.title("About the App")
     md_path = PROJECT_ROOT / "README.md"
     if md_path.exists():
@@ -1324,7 +1286,7 @@ elif page == "3️⃣About The App":
 # =====================================================================
 # 📚 PAGE 4: USER GUIDE
 # =====================================================================
-elif page == "📚User Guide":
+elif page == "📚 User Guide":
     st.title("📚 User Guide")
     md_path = PROJECT_ROOT / "docs" / "User_guide.md"
     if md_path.exists():
@@ -1335,7 +1297,7 @@ elif page == "📚User Guide":
 # =====================================================================
 # 🧠 PAGE 5: KNOWLEDGE BASE
 # =====================================================================
-elif page == "🧠Knowledge Base":
+elif page == "🧠 Knowledge Base":
     st.title("🧠 Knowledge Base Repository")
     st.caption("Aggregated vector repository and historical resolutions.")
 
