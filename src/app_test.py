@@ -291,7 +291,7 @@ st.markdown(
     }
     
     /* =========================================================
-       2. SIDEBAR NAVIGATION (Vibrant Unique Icon Ring Palettes)
+       2. SIDEBAR NAVIGATION (Reliable Cross-Version Styling)
        ========================================================= */
     [data-testid="stSidebar"] {
         background-color: #FFFFFF !important;
@@ -306,6 +306,7 @@ st.markdown(
         margin-bottom: 12px;
     }
 
+    /* Target radio options safely */
     [data-testid="stSidebar"] div[role="radiogroup"] {
         display: flex;
         flex-direction: column;
@@ -315,183 +316,98 @@ st.markdown(
 
     [data-testid="stSidebar"] div[role="radiogroup"] > label {
         width: 100% !important;
-        min-height: 54px !important;
-        border-radius: 20px !important;
+        min-height: 50px !important;
+        border-radius: 16px !important;
         font-weight: 800 !important;
         font-size: 1.0rem !important;
-        padding: 4px 18px !important;
+        padding: 8px 16px !important;
         transition: all 0.22s ease-in-out !important;
         box-shadow: 0 3px 8px rgba(0, 0, 0, 0.04) !important;
+        display: flex !important;
+        align-items: center !important;
     }
 
-    [data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-child {
+    /* Hide native radio circle cleanly without hiding text */
+    [data-testid="stSidebar"] div[role="radiogroup"] input[type="radio"] {
         display: none !important;
+    }
+
+    /* Ensure text labels inside radio options stay fully visible and high-contrast */
+    [data-testid="stSidebar"] div[role="radiogroup"] label p,
+    [data-testid="stSidebar"] div[role="radiogroup"] label span {
+        color: #0F172A !important;
+        font-weight: 800 !important;
     }
 
     /* BUTTON 1: 🏠 Dashboard -> Pink */
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(1) {
         background-color: #FDF2F8 !important;
-        border: 6px solid #FBCFE8 !important;
+        border: 4px solid #FBCFE8 !important;
     }
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(1):hover {
         border-color: #F472B6 !important;
-        transform: translateY(-2px);
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(1):has(input:checked),
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(1)[data-checked="true"] {
-        background: linear-gradient(135deg, #EC4899 0%, #DB2777 100%) !important;
-        border: 6px solid #FBCFE8 !important;
-        box-shadow: 0 6px 16px rgba(219, 39, 119, 0.35) !important;
     }
 
     /* BUTTON 2: 1️⃣ Submit Bug -> Butter Gold */
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(2) {
         background-color: #FEFCE8 !important;
-        border: 6px solid #FEF08A !important;
+        border: 4px solid #FEF08A !important;
     }
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(2):hover {
         border-color: #FACC15 !important;
-        transform: translateY(-2px);
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(2):has(input:checked),
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(2)[data-checked="true"] {
-        background: linear-gradient(135deg, #EAB308 0%, #CA8A04 100%) !important;
-        border: 6px solid #FEF08A !important;
-        box-shadow: 0 6px 16px rgba(202, 138, 4, 0.35) !important;
     }
 
     /* BUTTON 3: 2️⃣ Analytics Dashboard -> Azure Blue */
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(3) {
         background-color: #F0F9FF !important;
-        border: 6px solid #BAE6FD !important;
+        border: 4px solid #BAE6FD !important;
     }
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(3):hover {
         border-color: #38BDF8 !important;
-        transform: translateY(-2px);
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(3):has(input:checked),
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(3)[data-checked="true"] {
-        background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%) !important;
-        border: 6px solid #BAE6FD !important;
-        box-shadow: 0 6px 16px rgba(2, 132, 199, 0.35) !important;
     }
 
     /* BUTTON 4: 🧠 Knowledge Base -> Emerald Mint Green */
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(4) {
         background-color: #F0FDF4 !important;
-        border: 6px solid #BBF7D0 !important;
+        border: 4px solid #BBF7D0 !important;
     }
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(4):hover {
         border-color: #4ADE80 !important;
-        transform: translateY(-2px);
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(4):has(input:checked),
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(4)[data-checked="true"] {
-        background: linear-gradient(135deg, #16A34A 0%, #15803D 100%) !important;
-        border: 6px solid #BBF7D0 !important;
-        box-shadow: 0 6px 16px rgba(22, 163, 74, 0.35) !important;
     }
 
     /* BUTTON 5: 3️⃣ About The App -> Peach / Coral */
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(5) {
         background-color: #FFF7ED !important;
-        border: 6px solid #FED7AA !important;
+        border: 4px solid #FED7AA !important;
     }
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(5):hover {
         border-color: #FB923C !important;
-        transform: translateY(-2px);
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(5):has(input:checked),
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(5)[data-checked="true"] {
-        background: linear-gradient(135deg, #EA580C 0%, #C2410C 100%) !important;
-        border: 6px solid #FED7AA !important;
-        box-shadow: 0 6px 16px rgba(234, 88, 12, 0.35) !important;
     }
 
     /* BUTTON 6: 📚 User Guide -> Royal Purple */
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(6) {
         background-color: #FAF5FF !important;
-        border: 6px solid #E9D5FF !important;
+        border: 4px solid #E9D5FF !important;
     }
     [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(6):hover {
         border-color: #C084FC !important;
-        transform: translateY(-2px);
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(6):has(input:checked),
-    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(6)[data-checked="true"] {
-        background: linear-gradient(135deg, #9333EA 0%, #7E22CE 100%) !important;
-        border: 6px solid #E9D5FF !important;
-        box-shadow: 0 6px 16px rgba(147, 51, 234, 0.35) !important;
     }
 
-    [data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p,
-    [data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] p {
-        color: #FFFFFF !important;
-        font-weight: 900 !important;
+    /* BUTTON 7: 🛡️ Admin Panel (if visible) -> Slate / Dark */
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(7) {
+        background-color: #F1F5F9 !important;
+        border: 4px solid #CBD5E1 !important;
     }
-    
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:nth-of-type(7):hover {
+        border-color: #64748B !important;
+    }
+
     /* Default cards */
     [data-testid="stVerticalBlockBorderWrapper"] {
         background-color: #FFFFFF !important;
         border: 1px solid #CBD5E1 !important;
         border-radius: 12px !important;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
-    }
-
-    /* =========================================================
-       TELEMETRY METRIC CARDS (Custom Direct Selectors)
-       ========================================================= */
-    /* Target any container with the corresponding card class */
-    div:has(> .telemetry-card-1),
-    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-1) {
-        background-color: #F0F9FF !important;
-        border: 6px solid #BAE6FD !important;
-        border-radius: 24px !important;
-        box-shadow: 0 6px 16px rgba(186, 230, 253, 0.45) !important;
-        transition: transform 0.2s ease !important;
-    }
-    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-1):hover {
-        border-color: #38BDF8 !important;
-        transform: translateY(-2px);
-    }
-
-    div:has(> .telemetry-card-2),
-    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-2) {
-        background-color: #FFF1F2 !important;
-        border: 6px solid #FECDD3 !important;
-        border-radius: 24px !important;
-        box-shadow: 0 6px 16px rgba(254, 205, 211, 0.45) !important;
-        transition: transform 0.2s ease !important;
-    }
-    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-2):hover {
-        border-color: #FB7185 !important;
-        transform: translateY(-2px);
-    }
-
-    div:has(> .telemetry-card-3),
-    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-3) {
-        background-color: #F0FDF4 !important;
-        border: 6px solid #BBF7D0 !important;
-        border-radius: 24px !important;
-        box-shadow: 0 6px 16px rgba(187, 247, 208, 0.45) !important;
-        transition: transform 0.2s ease !important;
-    }
-    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-3):hover {
-        border-color: #4ADE80 !important;
-        transform: translateY(-2px);
-    }
-
-    div:has(> .telemetry-card-4),
-    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-4) {
-        background-color: #FEFCE8 !important;
-        border: 6px solid #FEF08A !important;
-        border-radius: 24px !important;
-        box-shadow: 0 6px 16px rgba(254, 240, 138, 0.45) !important;
-        transition: transform 0.2s ease !important;
-    }
-    [data-testid="stVerticalBlockBorderWrapper"]:has(.telemetry-card-4):hover {
-        border-color: #FACC15 !important;
-        transform: translateY(-2px);
     }
 
     /* Buttons & standard form controls */
@@ -629,7 +545,6 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
 
 # =====================================================================
 # 🔐 AUTHENTICATION GATEWAY
