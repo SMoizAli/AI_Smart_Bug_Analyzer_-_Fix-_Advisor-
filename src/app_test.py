@@ -527,6 +527,8 @@ import importlib
 import auth_ui
 importlib.reload(auth_ui)
 auth_ui.render_infosys_auth_gateway(verify_user, register_user)
+from theme_dark import apply_dark_theme
+apply_dark_theme()
 
 # =====================================================================
 # 🧭 DYNAMIC ROLE-BASED SIDEBAR NAVIGATION
