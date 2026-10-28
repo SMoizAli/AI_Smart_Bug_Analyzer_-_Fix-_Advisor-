@@ -2,7 +2,7 @@
 
 *(Formerly: AI Smart Bug Analyzer & Fix Advisor — renamed per Milestone 4 guidance; no change to objectives, implementation, or deliverables.)*
 
-> 🚀 **Live Demo:** [https://6fok68lbrbe9y8afg4entg.streamlit.app/](https://6fok68lbrbe9y8afg4entg.streamlit.app/)  
+> 🚀 **Live Demo:** [https://bug-analyzer-fix-advisor-rbs.streamlit.app/](https://bug-analyzer-fix-advisor-rbs.streamlit.app/)  
 > 📦 **Interactive Streamlit Cloud Deployment**
 
 - An AI-powered system that takes bug reports, stack traces, or error logs and uses a multi-agent pipeline combined with a RAG knowledge base of historical  defects to triage, analyze, detect duplicates, and suggest fixes for software bugs  and grows its own knowledge base over time as recommendations are confirmed working.
@@ -96,13 +96,3 @@ notebooks/    → exploration/testing notebooks (chunking, embeddings, retrieval
 ---
 
 
-## Status (as of Milestone 4)
-
-- [x] Milestones 1–3: Knowledge base, all 5 agents, full pipeline — complete
-- [x] Milestone 4, Task 1: Defect Pattern Analytics Dashboard — complete
-- [x] Milestone 4, Task 2: Knowledge Base Growth Mechanism — complete, verified
-- [x] Milestone 4, Task 3: End-to-End Testing — partially complete (16/39
-      test cases; remainder blocked by LLM provider daily quota — see Testing
-      Report for full detail)
-- [x] Milestone 4, Task 4: Documentation, project report, final demo
-- [x] Live Deployment : Deployed at Streamlit Cloud at  `https://6fok68lbrbe9y8afg4entg.streamlit.app/`
