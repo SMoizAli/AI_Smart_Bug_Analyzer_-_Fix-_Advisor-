@@ -514,6 +514,42 @@ st.markdown(
     .logout-btn-wrapper button:hover {
         background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important;
     }
+    /* =========================================================
+       FIX INVISIBLE TEXT IN st.json() & CODE BLOCKS
+       ========================================================= */
+    /* Target the JSON viewer container */
+    [data-testid="stJson"], 
+    [data-testid="stJson"] * {
+        font-family: 'Consolas', 'Courier New', monospace !important;
+    }
+
+    /* JSON property keys (e.g. "bug_id", "severity", "triage") */
+    [data-testid="stJson"] span[style*="color"],
+    [data-testid="stJson"] .variable-row span {
+        color: #E2E8F0 !important; /* Crisp light silver-white */
+    }
+
+    /* JSON string values */
+    [data-testid="stJson"] span[style*="rgb(203, 75, 22)"],
+    [data-testid="stJson"] span[style*="rgb(42, 161, 152)"],
+    [data-testid="stJson"] .string-value,
+    [data-testid="stJson"] .variable-value > * {
+        color: #38BDF8 !important; /* Bright readable cyan/sky-blue */
+    }
+
+    /* JSON brackets, braces, and punctuation */
+    [data-testid="stJson"] .brace-row,
+    [data-testid="stJson"] span {
+        color: #F8FAFC !important;
+    }
+
+    /* Fallback for native Streamlit JSON code wrappers */
+    div[data-testid="stJson"] {
+        background-color: #0F172A !important;
+        border: 1px solid #334155 !important;
+        border-radius: 10px !important;
+        padding: 12px !important;
+    }
     
     </style>
     """,

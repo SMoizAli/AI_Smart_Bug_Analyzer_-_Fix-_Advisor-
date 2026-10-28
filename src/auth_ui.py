@@ -47,7 +47,7 @@ def render_infosys_auth_gateway(verify_user_fn, register_user_fn):
             background-position: center center !important;
             background-attachment: fixed !important;
         }}
-        /* Top Infosys Equinox Navbar */
+        /* Top Infosys Springboard  Equinox Navbar */
         .equinox-navbar {{
             display: flex;
             justify-content: space-between;
@@ -148,7 +148,7 @@ def render_infosys_auth_gateway(verify_user_fn, register_user_fn):
         </style>
         <div class="equinox-navbar">
             <div>
-                <span style="color:#FFFFFF; font-size:21px; font-weight:700;">Infosys</span>
+                <span style="color:#FFFFFF; font-size:21px; font-weight:700;">Infosys Springboard</span>
                 <span style="color:#38BDF8; font-size:21px; font-weight:300;">equinox</span>
             </div>
             <div class="equinox-links">
